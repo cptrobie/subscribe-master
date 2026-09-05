@@ -44,9 +44,21 @@ CREATE INDEX idx_notification_log_subscription_id ON notification_log (subscript
 CREATE INDEX idx_notification_log_type_sent ON notification_log (notification_type, sent_at);
 
 -- Prevents sending the same reminder type twice for the same subscription
--- on the same day the scheduler runs.
+-- on the same UTC day the scheduler runs.
+--
+-- PostgreSQL requires index expressions to be IMMUTABLE, but casting
+-- timestamptz -> date directly depends on the session's timezone setting
+-- and is only STABLE, not IMMUTABLE — it cannot be used directly in an
+-- index (fails with "functions in index expression must be marked
+-- IMMUTABLE"). This wrapper pins the conversion to UTC explicitly, making
+-- it deterministic regardless of session timezone settings.
+CREATE OR REPLACE FUNCTION immutable_date_utc(timestamptz)
+RETURNS date AS $$
+    SELECT ($1 AT TIME ZONE 'UTC')::date;
+$$ LANGUAGE sql IMMUTABLE;
+
 CREATE UNIQUE INDEX uq_notification_log_daily_dedup
-    ON notification_log (subscription_id, notification_type, (sent_at::date))
+    ON notification_log (subscription_id, notification_type, immutable_date_utc(sent_at))
     WHERE sent_at IS NOT NULL;
 
 
