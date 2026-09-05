@@ -222,14 +222,14 @@ ORDER BY created_at
 LIMIT 100;
 ```
 
-**Check whether a reminder was already sent today** (what `uq_notification_log_daily_dedup` enforces — useful for the scheduler to check before attempting an insert):
+**Check whether a reminder was already sent today** (what `uq_notification_log_daily_dedup` enforces — useful for the scheduler to check before attempting an insert; matches the index's UTC-day logic, see `V4__requirement_gap_closures.sql`):
 
 ```sql
 SELECT EXISTS (
     SELECT 1 FROM notification_log
     WHERE subscription_id = $1
       AND notification_type = $2
-      AND sent_at::date = CURRENT_DATE
+      AND immutable_date_utc(sent_at) = immutable_date_utc(now())
 ) AS already_sent_today;
 ```
 
