@@ -21,7 +21,7 @@ This section will be updated as Wave 0 progresses.
 
 | Tool | Needed for | Notes |
 |---|---|---|
-| **Java 17** | Building/running the application | Once the project exists (Wave 0, step 3) |
+| **Java 21** | Building/running the application | Once the project exists (Wave 0, step 3) |
 | **Maven** | Build tool | |
 | **Docker Desktop** | Local Postgres + Vault | Required now — see Getting Started |
 | **IntelliJ IDEA** | Development | Recommended, not required |
@@ -92,9 +92,9 @@ This section will be updated as Wave 0 progresses.
 
 | Technology | Role |
 |---|---|
-| Java 17 | Language |
+| Java 21 | Language |
 | Maven | Build tool |
-| Spring Boot 3.x | Application framework |
+| Spring Boot 4.x | Application framework |
 | PostgreSQL | Primary database |
 | Flyway | Database migrations |
 | HashiCorp Vault | Secrets management, all environments including local dev |
