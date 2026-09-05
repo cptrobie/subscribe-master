@@ -2,6 +2,8 @@
 
 Practical SQL for the questions that come up repeatedly against this schema. Grouped by domain, with a note on which requirement (if any) each query backs. All examples assume PostgreSQL and the table/column names from `migrations/` (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`) — the migration set is the sole source of truth for the schema; there's no longer a separate monolithic schema file.
 
+**A note on status/enum value casing:** every `CHECK`-constrained status/type column in this schema is lowercase (`'succeeded'`, `'failed'`, `'customer'`, `'log'`, `'ok'`, etc.) with **one deliberate exception** — `customer_subscriptions.status` uses uppercase (`'ACTIVE'`, `'CANCELLED'`, `'PAUSED'`), to match `task.pdf`'s literal spec wording so it maps directly to a Java enum. Getting this wrong doesn't error — `WHERE status = 'active'` against `customer_subscriptions` just silently returns zero rows, which is a much harder bug to spot than a query failing outright. Every example query below already uses the correct casing for its table; when writing a new one, double-check this column specifically.
+
 ---
 
 ## 1. Subscriptions
