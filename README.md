@@ -8,10 +8,11 @@ This project started from a take-home assignment brief and has since grown into 
 
 ## Status
 
-This project is in early setup (**Wave 0 — Project bootstrap**, see `IMPLEMENTATION_BACKLOG.md`). No application code exists yet — what's currently in the repo is the design phase output: the database schema, ERD, and planning documents, plus the local infrastructure needed to start building against.
+This project is in early setup (Wave 0 — Project bootstrap, see `IMPLEMENTATION_BACKLOG.md`). 
 
-**Currently runnable:** local Postgres + Vault (dev mode), and the Flyway migrations against them.
-**Not yet runnable:** the application itself — there's no Spring Boot project in this repo yet.
+The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with the core dependencies added (JPA, PostgreSQL, Flyway, Vault), but no actual business logic (entities, controllers, services) has been written yet, and the Flyway migration files haven't been added to the repo yet either.
+
+**Currently runnable:** local Postgres + Vault (dev mode) via `docker-compose.yml`. **Not yet functionally runnable:** the application boots to an empty shell at best — there's no business logic, and the migrations aren't in the repo to validate the database against yet.
 
 This section will be updated as Wave 0 progresses.
 
@@ -21,7 +22,7 @@ This section will be updated as Wave 0 progresses.
 
 | Tool | Needed for | Notes |
 |---|---|---|
-| **Java 21** | Building/running the application | Once the project exists (Wave 0, step 3) |
+| **Java 21** | Building/running the application | |
 | **Maven** | Build tool | |
 | **Docker Desktop** | Local Postgres + Vault | Required now — see Getting Started |
 | **IntelliJ IDEA** | Development | Recommended, not required |
@@ -45,14 +46,25 @@ This section will be updated as Wave 0 progresses.
    This starts Postgres (`localhost:5432`) and Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `docker-compose.yml` for why dev mode is safe to hardcode locally but nowhere else).
 3. **Run the database migrations:**
    ```
-   flyway -url=jdbc:postgresql://localhost:5432/subscribe_master \
+      flyway -url=jdbc:postgresql://localhost:5432/subscribe_master \
           -user=subscribe_master -password=local_dev_only_not_a_real_secret \
-          -locations=filesystem:migrations \
+          -locations=filesystem:src/main/resources/db/migration \
           migrate
    ```
-   This applies every migration in `migrations/` in order (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`) and seeds the roles/permissions and subscription provider catalog.
+   This applies every migration in `src/main/resources/db/migration/` in order (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`) and seeds the roles/permissions and subscription provider catalog.
 4. **Inspect the result** in pgAdmin 4, or `psql`, to confirm the schema and seed data landed as expected.
-5. *(Once the application project exists)* — this section will be extended with build/run instructions.
+5. **Seed Vault with the database credentials** the app will read at startup. Either method works — the CLI, if installed:
+
+   ```
+      vault login -address=http://localhost:8200 local-dev-root-token
+      vault kv put -address=http://localhost:8200 secret/subscribe-master \
+        spring.datasource.username=subscribe_master \
+        spring.datasource.password=local_dev_only_not_a_real_secret
+   ```
+   Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same two key/value pairs.
+
+   Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
+6. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
 
 ---
 
@@ -60,17 +72,13 @@ This section will be updated as Wave 0 progresses.
 
 ```
 .
-├── migrations/                          # Flyway schema + seed migrations (source of truth for the DB)
+├── src/main/resources/db/migration/     # Flyway schema + seed migrations (source of truth for the DB)
 ├── subscribe_master_erd.drawio          # Entity-relationship diagram (open in draw.io / app.diagrams.net)
 ├── docker-compose.yml                   # Local Postgres + Vault (dev mode)
 ├── ARCHITECTURE.md                      # Design decisions, dev/ops guidance
 ├── subscribe_master_requirements.md     # Functional/non-functional requirements, with schema coverage status
 ├── IMPLEMENTATION_BACKLOG.md            # GitHub issue backlog, wave-based prioritization, sizing
-├── COMMON_QUERIES.md                    # Reference SQL for common tasks
-├── erd_design_notes.md                  # Design rationale: auth/authz
-├── subscription_erd_design_notes.md     # Design rationale: subscriptions, currency, Stripe
-├── billing_retry_refund_design_notes.md # Design rationale: retry/dunning, partial refunds
-└── gap_closure_design_notes.md          # Design rationale: requirement gap closures
+└── COMMON_QUERIES.md                    # Reference SQL for common tasks
 ```
 
 ---
