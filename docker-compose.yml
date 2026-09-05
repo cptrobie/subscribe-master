@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: subscribe-master-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: subscribe_master
+      POSTGRES_USER: subscribe_master
+      POSTGRES_PASSWORD: local_dev_only_not_a_real_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U subscribe_master -d subscribe_master"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  vault:
+    image: hashicorp/vault:1.17
+    container_name: subscribe-master-vault
+    restart: unless-stopped
+    # Dev mode only — auto-unseals, stores everything in memory, and uses a
+    # fixed root token. This is intentionally NOT how staging/prod Vault is
+    # configured (see ARCHITECTURE.md §9) — dev mode exists purely so local
+    # development exercises the same secret-retrieval code path as every
+    # other environment, per NFR-20, without the operational overhead of a
+    # real unseal/storage backend on a laptop.
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: local-dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- app service intentionally omitted for now ---
+  # There's no Spring Boot application/Dockerfile to build yet at this stage
+  # of Wave 0. Once the project exists (step 3 in the task order), add:
+  #
+  #   app:
+  #     build: .
+  #     depends_on:
+  #       postgres:
+  #         condition: service_healthy
+  #       vault:
+  #         condition: service_healthy
+  #     environment:
+  #       SPRING_PROFILES_ACTIVE: dev
+  #       VAULT_ADDR: http://vault:8200
+  #       VAULT_TOKEN: local-dev-root-token
+  #     ports:
+  #       - "8080:8080"
+  #
+  # Until then, `docker compose up` gives you a working local Postgres +
+  # Vault to develop and run Flyway migrations against.
+
+volumes:
+  postgres_data:
