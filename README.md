@@ -84,7 +84,7 @@ This section will be updated as Wave 0 progresses.
 | `IMPLEMENTATION_BACKLOG.md` | The GitHub issue backlog: one issue per requirement, sequenced into waves, sized S/M/L |
 | `COMMON_QUERIES.md` | Practical SQL for the questions that come up repeatedly against this schema |
 | `subscribe_master_erd.drawio` | The entity-relationship diagram, with a legend explaining the color-coded domain sections |
-| `erd_design_notes.md`, `subscription_erd_design_notes.md`, `billing_retry_refund_design_notes.md`, `gap_closure_design_notes.md` | The design history behind specific decisions, if you want the full reasoning rather than the summary in `ARCHITECTURE.md` |
+
 
 ---
 
