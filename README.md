@@ -8,13 +8,11 @@ This project started from a take-home assignment brief and has since grown into 
 
 ## Status
 
-This project is in early setup (Wave 0 — Project bootstrap, see `IMPLEMENTATION_BACKLOG.md`).
+**Wave 0 — Project bootstrap is complete.** The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with all core dependencies wired and verified working: JPA, PostgreSQL, Flyway, Vault, and Testcontainers.
 
-The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with the core dependencies added (JPA, PostgreSQL, Flyway, Vault), but no actual business logic (entities, controllers, services) has been written yet.
+**Proven working, not just configured:** a GitHub Actions CI pipeline (`.github/workflows/ci.yml`) runs on every push/PR and passes — `SubscribeMasterApplicationIT` boots the full Spring context against ephemeral Testcontainers-managed Postgres and Vault, Flyway migrates the complete schema from scratch, Hibernate validates it, and the datasource credentials resolve correctly from Vault. This all happens automatically, with no manually-started infrastructure required in CI.
 
-**Currently runnable:** local Postgres + Vault (dev mode) via `docker-compose.yml`, with the full database schema applied via Flyway (`src/main/resources/db/migration/`) — validated end-to-end against a real Postgres instance, including seed data. **Not yet functionally runnable:** the application itself boots to an empty shell at best — there's no business logic wired up yet to actually use that schema.
-
-This section will be updated as Wave 0 progresses.
+**Still not built:** any actual business logic. No entities, repositories, controllers, or real subscription/payment/auth functionality exists yet — Wave 0 was entirely infrastructure and wiring. Wave 1 (Authentication core) is next; see `IMPLEMENTATION_BACKLOG.md`.
 
 ---
 
