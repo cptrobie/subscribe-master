@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # No manually-configured Postgres/Vault services here — deliberately.
+    # SubscribeMasterApplicationIT provisions its own throwaway Postgres
+    # and Vault via Testcontainers, and GitHub's ubuntu-latest runners
+    # have Docker pre-installed, so Testcontainers works natively with
+    # zero extra setup. Running manually-configured services *and*
+    # Testcontainers together would just be two overlapping sets of
+    # containers doing redundant work.
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and run all tests (unit + integration)
+        # mvn verify runs the full lifecycle proven locally: Surefire
+        # (SubscribeMasterApplicationTests, infra-free smoke test) during
+        # the test phase, then Failsafe (SubscribeMasterApplicationIT)
+        # during integration-test/verify — which provisions its own
+        # Postgres and Vault via Testcontainers, migrates the schema with
+        # Flyway, validates it with Hibernate, and resolves the datasource
+        # credentials from Vault. Same command, same result as running it
+        # locally — nothing CI-specific needed.
+        run: ./mvnw -B verify
