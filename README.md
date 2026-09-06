@@ -8,11 +8,11 @@ This project started from a take-home assignment brief and has since grown into 
 
 ## Status
 
-This project is in early setup (Wave 0 — Project bootstrap, see `IMPLEMENTATION_BACKLOG.md`). 
+This project is in early setup (Wave 0 — Project bootstrap, see `IMPLEMENTATION_BACKLOG.md`).
 
-The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with the core dependencies added (JPA, PostgreSQL, Flyway, Vault), but no actual business logic (entities, controllers, services) has been written yet, and the Flyway migration files haven't been added to the repo yet either.
+The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with the core dependencies added (JPA, PostgreSQL, Flyway, Vault), but no actual business logic (entities, controllers, services) has been written yet.
 
-**Currently runnable:** local Postgres + Vault (dev mode) via `docker-compose.yml`. **Not yet functionally runnable:** the application boots to an empty shell at best — there's no business logic, and the migrations aren't in the repo to validate the database against yet.
+**Currently runnable:** local Postgres + Vault (dev mode) via `docker-compose.yml`, with the full database schema applied via Flyway (`src/main/resources/db/migration/`) — validated end-to-end against a real Postgres instance, including seed data. **Not yet functionally runnable:** the application itself boots to an empty shell at best — there's no business logic wired up yet to actually use that schema.
 
 This section will be updated as Wave 0 progresses.
 
