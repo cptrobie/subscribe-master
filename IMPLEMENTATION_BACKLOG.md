@@ -11,6 +11,7 @@
 3. Within a wave, issues can usually be worked in parallel or in any order unless a note says otherwise.
 4. Some issues will decompose into implementation subtasks once picked up (e.g. `FR-12` likely splits into "create Stripe payment intent," "handle webhook," "persist `payment_history` row") — use the issue's checklist feature for that; it doesn't need a new top-level requirement ID.
 5. Apply a size label (`S`/`M`/`L`) to each issue when you open it, using the rubric below.
+6. Copy the relevant work-type checklist(s) from **"Issue checklists by work type"** below into the issue as a task list, based on what kind of work it actually involves — not every checklist applies to every issue, and most issues will pull from more than one (e.g. a new endpoint usually touches both the "REST endpoint" and "service" checklists).
 
 ---
 
@@ -43,7 +44,62 @@ The backlog below still lists one issue per NFR either way, but issues in the se
 
 ---
 
-## Wave 0 — Project bootstrap
+## Issue checklists by work type
+
+Most issues involve one or more of these categories. Pick whichever apply and paste that checklist into the issue when you start it — this is how the "standing convention" NFRs (§ above) actually get enforced per-PR, rather than only existing as an abstract policy nobody checks against.
+
+**Always applies, every issue, no exceptions:**
+- [ ] Code style follows the Google Java Style Guide (NFR-06)
+- [ ] Reads as Clean Code — clear naming, no dead code, no commented-out blocks left in (NFR-10)
+
+**New REST endpoint / controller:**
+- [ ] Swagger/OpenAPI annotations present (NFR-09)
+- [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
+- [ ] Constructor injection only, no field injection (NFR-14)
+- [ ] Errors bubble up to the global exception handler rather than being caught/formatted locally (NFR-02)
+- [ ] Request/response uses DTOs — entities are never returned directly
+
+**New JPA entity / mapping:**
+- [ ] Every association explicitly marked `LAZY` (NFR-15)
+- [ ] `created_at`/`updated_at` present if the row is mutable, matching the pattern already established across the schema (NFR-07)
+- [ ] `@Version` mapped if this entity needs optimistic locking (already required on `customer_subscriptions`/`payment_history` — consider whether a new entity needs it too) (NFR-04)
+- [ ] Entity lives in the correct package per layered architecture (NFR-01)
+
+**New repository / query method:**
+- [ ] Uses JPQL or the Specification API — no native SQL (NFR-16)
+- [ ] Paginated (`Pageable`) if the result set could grow unbounded
+- [ ] Constructor injection only (NFR-14)
+
+**New service / business logic:**
+- [ ] Business logic lives here, not leaked into the controller (NFR-01)
+- [ ] Constructor injection only (NFR-14)
+- [ ] Wrapped in `@Transactional` if it touches money or spans multiple table writes (NFR-03)
+- [ ] Optimistic-lock conflicts are caught and retried where relevant, not left to bubble as a raw 500 (NFR-04)
+- [ ] Writes an `audit_logs` entry if this is the kind of action that should be auditable (NFR-17)
+
+**New scheduled job:**
+- [ ] Uses ShedLock so it can't run concurrently across multiple instances (FR-21)
+- [ ] Outcomes are logged appropriately — `notification_log` if it's a customer-facing notification
+- [ ] Constructor injection only (NFR-14)
+
+**New Flyway migration:**
+- [ ] Placed in `src/main/resources/db/migration/`, correctly named (`Vx__description.sql`, or `R__` for repeatable)
+- [ ] Status/enum casing follows the existing convention — lowercase, except `customer_subscriptions.status` (see `COMMON_QUERIES.md`)
+- [ ] Any index expression using a function is checked for the `IMMUTABLE` requirement before assuming it'll apply cleanly (see `V4`'s history for exactly why)
+- [ ] Actually run — via `flyway migrate` or `mvn verify` (Testcontainers) — not just reviewed by eye
+
+**New external integration (Stripe, cbu.uz, additional Vault usage, etc.):**
+- [ ] Secrets/credentials sourced from Vault — never hardcoded, never in `.env` (NFR-08/NFR-20)
+- [ ] Resilience/fallback considered (Circuit Breaker pattern) if this is a live call in the request path, following the `FR-16` precedent
+- [ ] Errors from the external service are translated, not leaked as raw stack traces to the client (NFR-02)
+
+**New test:**
+- [ ] Follows the `SubscribeMasterApplicationIT` Testcontainers pattern if it needs a real Postgres/Vault, rather than a hand-rolled setup
+- [ ] Named `*Test`/`*Tests` for unit tests (runs via Surefire) or `*IT` for integration tests (runs via Failsafe) — this suffix is mechanically load-bearing, not just a style choice
+
+---
+
+## Wave 0 — Project bootstrap ✅ Complete (verified via CI)
 
 **Rationale:** nothing else can be built, tested, or deployed without this. Do this before writing feature code, not alongside it. This wave also absorbs the non-code setup tasks that used to sit in a separate "Environment & Third-Party Setup" bucket in the Overview graph — they're one-time bootstrap work with no real ordering dependency relative to the code-focused items below, so keeping them in a separate wave/node implied a sequencing that didn't actually exist.
 
@@ -156,7 +212,7 @@ The backlog below still lists one issue per NFR either way, but issues in the se
 
 - `[NFR-06] Code style compliance (Google Java Style Guide)` — **[S]** **(standing — verify)**
 - `[NFR-10] Clean Code principles` — **[S]** **(standing — verify)**
-- `[NFR-11] Minimum test coverage (30%, JUnit 5 + AssertJ)` — **[L]**
+- `[NFR-11] Minimum test coverage (30%, JUnit 5 + AssertJ)` — **[L]** *(tooling set up early — JaCoCo reporting and Testcontainers dependencies were added during Wave 0 bootstrap, per the reasoning that test infrastructure is cheap to establish early and expensive to retrofit; see `SubscribeMasterApplicationIT` for the reference pattern, now verified working both locally and in CI. What remains for this wave is the actual work: writing enough tests to hit 30% coverage, then flipping `jacoco.check.skip` to `false` in `pom.xml` to enforce it going forward.)*
 - `[NFR-09] API documentation completeness (Swagger)` — **[S]** **(standing — verify)**
 
 ---
