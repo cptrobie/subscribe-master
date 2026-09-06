@@ -1,3 +1,25 @@
-spring
-  application
-    name=subscribe-master
+spring:
+  datasource:
+    url: ${DATASOURCE_URL}
+    # username/password pulled from Vault (see application.yml's kv config)
+    # — never set here, and never given a fallback default the way dev's
+    # token is. If any of these env vars are missing, startup should fail
+    # loudly rather than silently falling back to something insecure.
+
+  cloud:
+    vault:
+      host: ${VAULT_HOST}
+      port: ${VAULT_PORT:8200}
+      scheme: https
+      # AppRole, not a static token — a prod service authenticates itself
+      # to Vault with its own role/secret ID pair (typically injected by
+      # whatever orchestrates deployment), not a long-lived shared token.
+      authentication: APPROLE
+      app-role:
+        role-id: ${VAULT_ROLE_ID}
+        secret-id: ${VAULT_SECRET_ID}
+
+logging:
+  level:
+    root: WARN
+    org.springframework.vault: WARN

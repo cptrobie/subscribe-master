@@ -11,7 +11,7 @@
     <groupId>com.acuity</groupId>
     <artifactId>subscribe-master</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>subscibe-master</name>
+    <name>subscribe-master</name>
     <description>subscribe-master</description>
     <url/>
     <licenses>
@@ -29,6 +29,12 @@
     <properties>
         <java.version>21</java.version>
         <spring-cloud.version>2025.1.3</spring-cloud.version>
+        <!-- NFR-11: coverage REPORTING is always on (see jacoco-maven-plugin below),
+             but enforcement is deliberately disabled for now — a hard 30% minimum
+             against an application that's still an empty shell would fail every
+             build for the wrong reason. Flip this to 'false' once Wave 1 has real
+             business logic and tests for the threshold to be meaningful against. -->
+        <jacoco.check.skip>true</jacoco.check.skip>
     </properties>
     <dependencies>
         <dependency>
@@ -55,12 +61,27 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ==================== Testing: Testcontainers (NFR-11) ====================
+             Versions managed by spring-boot-starter-parent — do not pin explicitly,
+             same reasoning as spring-cloud-starter-vault-config above. Used for
+             integration tests that provision their own throwaway Postgres/Vault per
+             run, rather than depending on docker-compose.yml already being started
+             manually. See src/test/.../ApplicationIntegrationIT.java for the
+             reference pattern this project follows. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-flyway-test</artifactId>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -81,6 +102,75 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!-- Runs *IT.java classes during mvn verify (not mvn test) — the
+            standard Maven convention: Surefire runs *Test/*Tests during
+            the test phase, Failsafe runs *IT during integration-test/
+            verify. This is what actually executes
+            SubscribeMasterApplicationIT. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>prepare-agent-integration</id>
+                        <goals>
+                            <goal>prepare-agent-integration</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report-integration</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>report-integration</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${jacoco.check.skip}</skip>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.30</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

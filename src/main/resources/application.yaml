@@ -1,3 +1,43 @@
-spring
-  application
-    name=subscribe-master
+spring:
+  application:
+    name: subscribe-master
+
+  # Spring Boot 4's Config Data API requires secrets sources to be declared
+  # via spring.config.import — Vault won't activate without this, even with
+  # spring-cloud-starter-vault-config on the classpath.
+  config:
+    import: "optional:vault://"
+
+  cloud:
+    vault:
+      enabled: true
+      kv:
+        enabled: true
+        backend: secret
+        # No path configured explicitly — Spring Cloud Vault defaults to
+        # secret/{spring.application.name} and secret/{spring.application.name}/{active-profile},
+        # so secrets should be written to secret/subscribe-master (shared)
+        # and/or secret/subscribe-master/dev, secret/subscribe-master/prod
+        # (profile-specific overrides). See README.md "Vault bootstrap"
+        # for the commands to actually populate these.
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate must never create/alter it.
+      # 'validate' checks entities match the schema and fails fast if not,
+      # rather than silently diverging from what the migrations define.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    # No 'locations' override — migrations live at the Spring Boot default
+    # (classpath:db/migration, i.e. src/main/resources/db/migration/), so
+    # they're picked up automatically and packaged into the built JAR.
+
+# spring.profiles.active is intentionally not set here — provide it externally
+# per environment (SPRING_PROFILES_ACTIVE env var, or docker-compose.yml's
+# app service once that exists), not hardcoded in a committed file.

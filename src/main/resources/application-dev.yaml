@@ -1,3 +1,30 @@
-spring
-  application
-    name=subscribe-master
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/subscribe_master
+    # username/password intentionally NOT set here — pulled from Vault at
+    # secret/subscribe-master (see application.yml). Populate before first
+    # run with:
+    #
+    #   vault kv put secret/subscribe-master \
+    #     spring.datasource.username=subscribe_master \
+    #     spring.datasource.password=local_dev_only_not_a_real_secret
+    #
+    # (matching the credentials already in docker-compose.yml). Without
+    # this, the app will fail to start — Vault's dev-mode container starts
+    # empty; nothing is seeded into it automatically.
+
+  cloud:
+    vault:
+      host: localhost
+      port: 8200
+      scheme: http
+      authentication: TOKEN
+      # Same throwaway dev-mode root token as docker-compose.yml. Safe to
+      # default here for the same reason it's safe there — see
+      # ARCHITECTURE.md §9 for why this pattern is dev-only, never prod.
+      token: ${VAULT_TOKEN:local-dev-root-token}
+
+logging:
+  level:
+    org.springframework.vault: DEBUG
+    org.springframework.cloud.vault: DEBUG
