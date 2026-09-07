@@ -174,6 +174,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 
 - `[FR-12] Payment history persistence, including after subscription cancellation` — **[L]**
 - `[NFR-03] Transactional integrity on money-related operations` — **[M]**
+- `[NFR-21] CD pipeline: automated deployment to staging/prod` — **[L]** *(blocked — do not start until a hosting platform is chosen; see `subscribe_master_requirements.md` for the full prerequisite list. Placed here because this wave completes the "Waves 0–6" milestone, the first point where deploying something actually means anything.)*
 
 ## Wave 7 — Payment resilience
 
