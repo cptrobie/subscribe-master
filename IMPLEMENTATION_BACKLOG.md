@@ -102,6 +102,39 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 
 ---
 
+## Time tracking process (estimate vs. actual)
+
+This project is worked part-time, ad-hoc, whenever time permits — not on a fixed schedule. The process below is built around that constraint specifically: no live timer to remember to start, just a comment logged at the natural moment a session already ends.
+
+**Alternatives considered, and why they weren't chosen:**
+- **GitHub Projects custom fields** (native, free, zero migration) — would let "Estimated"/"Actual" live as number fields directly on each issue. Ruled out for two reasons: it isn't open source (a stated preference), and it still requires manual entry with no automatic summation — no real advantage over comments plus a script for that specific gap.
+- **Super Productivity** (open source, installable desktop app, GitHub issue import) — genuinely well-built for estimate-vs-actual tracking, with a native UI for both. Ruled out for two concrete reasons: (1) its GitHub sync is one-directional — issues import in, but no time data writes back out, so the comparison would live in a second, separate system rather than on the issue itself; (2) actual time is captured via a live timer that "only works if the app is open" (confirmed via the project's own docs) — a real liability for ad-hoc work, since forgetting to hit start before a session means that time is simply lost, not just delayed.
+
+Staying in `gh`/GitHub keeps the estimate, every session log, and the final total all visible directly on the issue itself — one record, not two — and logging *after* a session ends (rather than needing to remember to start a timer *before* it begins) fits ad-hoc availability better.
+
+**Size → estimated hours mapping** (from the sizing rubric above): S = 4h, M = 12h (midpoint of the 1–2 day range), L = 24h (a floor, not a ceiling — Large is open-ended by definition).
+
+1. **When starting an issue**, log its estimate explicitly (translating the size label into hours once):
+
+`gh issue comment <N> --body "Estimate: ~4h (size-S)"`
+
+2. **At the end of each work session** — logged retrospectively, right when you stop, not via a live timer:
+
+`gh issue comment <N> --body "Actual: ~45m — brief note on what got done"`
+Supports `m`, `h`, or combined (`1h 30m`) — see `sum_issue_time.sh` for the exact formats it parses.
+
+3. **Before closing, to see the running total** rather than summing sessions by hand:
+
+`/sum_issue_time.sh <N>`
+
+4. **Close with the total copied in:**
+
+gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h estimated (size-S). Closing."
+
+**A note on what "actual" measures here:** these are focused-effort hours, not calendar time. An S-sized (4h) issue might take one evening or might take three scattered sessions over a week and a half — that's availability, not an estimation miss. Don't compare hours against calendar days; compare hours against hours.
+
+---
+
 ## Wave 0 — Project bootstrap ✅ Complete (verified via CI)
 
 **Rationale:** nothing else can be built, tested, or deployed without this. Do this before writing feature code, not alongside it. This wave also absorbs the non-code setup tasks that used to sit in a separate "Environment & Third-Party Setup" bucket in the Overview graph — they're one-time bootstrap work with no real ordering dependency relative to the code-focused items below, so keeping them in a separate wave/node implied a sequencing that didn't actually exist.
