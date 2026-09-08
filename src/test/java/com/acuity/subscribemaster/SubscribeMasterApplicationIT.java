@@ -46,7 +46,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * is part of core itself, so it doesn't have that problem.
  */
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        // The Vault import lives in application-{profile}.yaml, not application.yaml
+        // (see the note in application.yaml for why). This test runs with no
+        // profile, so it declares the import itself; the connection config it
+        // refers to is supplied as system properties in configureAndSeedVault().
+        properties = "spring.config.import=vault://")
 @AutoConfigureTestRestTemplate
 class SubscribeMasterApplicationIT {
 

@@ -1,4 +1,11 @@
 spring:
+  # Declared here, not in application.yaml, so it resolves *after* the APPROLE
+  # connection config below. See the long note in application.yaml. No
+  # "optional:" prefix — in prod a missing/unreachable Vault must fail startup
+  # loudly rather than silently booting without secrets.
+  config:
+    import: "vault://"
+
   datasource:
     url: ${DATASOURCE_URL}
     # username/password pulled from Vault (see application.yml's kv config)
