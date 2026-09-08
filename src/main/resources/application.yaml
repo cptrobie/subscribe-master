@@ -2,11 +2,24 @@ spring:
   application:
     name: subscribe-master
 
-  # Spring Boot 4's Config Data API requires secrets sources to be declared
-  # via spring.config.import — Vault won't activate without this, even with
-  # spring-cloud-starter-vault-config on the classpath.
-  config:
-    import: "optional:vault://"
+  # Spring Boot 4's Config Data API requires secrets sources to be declared via
+  # spring.config.import — Vault won't activate without it, even with
+  # spring-cloud-starter-vault-config on the classpath. It is declared per
+  # profile (application-dev.yaml, application-prod.yaml), NOT here, on purpose:
+  #
+  # The Config Data API resolves an import using only the property sources that
+  # precede the document declaring it. An import in this base file resolves
+  # before any application-{profile}.yaml is contributed, so the profile's Vault
+  # connection config (dev = TOKEN auth + token; prod = APPROLE + role/secret id)
+  # isn't visible yet. Spring Cloud Vault then falls back to its TOKEN default
+  # with no token and startup fails with:
+  #   "Cannot create authentication mechanism for TOKEN. This method requires
+  #    either a Token (spring.cloud.vault.token) or a token file at ~/.vault-token"
+  #
+  # Declaring the import inside each profile file means it resolves after that
+  # file's own connection config is in place. Integration tests run with no
+  # profile, so they declare the import via @SpringBootTest(properties = ...) and
+  # pass connection config as system properties — see SubscribeMasterApplicationIT.
 
   cloud:
     vault:

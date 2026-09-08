@@ -1,4 +1,10 @@
 spring:
+  # Declared here, not in application.yaml, so it resolves *after* the
+  # spring.cloud.vault.* connection config below is on the environment.
+  # See the long note in application.yaml for the full rationale.
+  config:
+    import: "optional:vault://"
+
   datasource:
     url: jdbc:postgresql://localhost:5432/subscribe_master
     # username/password intentionally NOT set here — pulled from Vault at
