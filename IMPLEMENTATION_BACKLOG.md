@@ -160,6 +160,7 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 - `[NFR-08] Environment-based configuration (dev/prod profiles, no hardcoded secrets)` — **[S]**
 - `[NFR-20] Vault integration for secrets management (all environments, including local dev)` — **[L]**
 - `[NFR-19] CI/CD pipeline for build, test, and deploy` — **[M]**
+- `[NFR-22] Time tracking and reporting tooling (estimate vs. actual, per-issue and whole-project)` — **[M]**
 - `[NFR-09] Set up API documentation (Swagger/OpenAPI)` — **[S]** — start this early so it grows with the API instead of being reconstructed at the end
 - `[NFR-01] Establish layered architecture (Controller → Service → Repository → Entity)` — **[S]** **(standing)**
 - `[NFR-14] Establish constructor-injection-only convention` — **[S]** **(standing)**
