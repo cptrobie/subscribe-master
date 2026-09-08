@@ -1,8 +1,21 @@
+# Deliberately NOT in the base application.yaml — spring.config.import
+# resolves as part of processing the document it's declared in, which can
+# happen before a *different* file's (profile-specific) properties are
+# merged into the environment. Since the AppRole connection config below
+# is profile-specific, declaring the import here too means both resolve
+# together in the same document, in the right order. See
+# application-dev.yaml for the fuller explanation and the original bug
+# this fixed (Spring Boot PR #49324, a Config Data API ordering issue).
+#
+# Deliberately NOT prefixed with "optional:" here, unlike dev — a
+# missing/unreachable Vault in production should fail the app outright
+# at startup, not silently boot without real secrets and fail later
+# with a confusing, disconnected error (e.g. the datasource connection
+# failing with no obvious link back to Vault being the actual cause).
 spring:
-  # Declared here, not in application.yaml, so it resolves *after* the APPROLE
-  # connection config below. See the long note in application.yaml. No
-  # "optional:" prefix — in prod a missing/unreachable Vault must fail startup
-  # loudly rather than silently booting without secrets.
+  # Resolves after the AppRole connection config below is on the
+  # environment (see the note just above this block for the full
+  # rationale, and application-dev.yaml for the original bug details).
   config:
     import: "vault://"
 

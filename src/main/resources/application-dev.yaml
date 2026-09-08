@@ -1,7 +1,17 @@
+# Deliberately NOT in the base application.yaml — spring.config.import
+# resolves as part of processing the document it's declared in, which can
+# happen before a *different* file's (profile-specific) properties are
+# merged into the environment. Since spring.cloud.vault.token below is
+# profile-specific, declaring the import here too means both resolve
+# together in the same document, in the right order. Splitting them
+# across files caused "Cannot create authentication mechanism for TOKEN"
+# even though the token property was correctly set — the import was
+# just resolving before it existed. See Spring Boot PR #49324 for the
+# underlying Config Data API ordering issue.
 spring:
   # Declared here, not in application.yaml, so it resolves *after* the
-  # spring.cloud.vault.* connection config below is on the environment.
-  # See the long note in application.yaml for the full rationale.
+  # spring.cloud.vault.* connection config below is on the environment
+  # (see the longer note just above this block for the full rationale).
   config:
     import: "optional:vault://"
 
