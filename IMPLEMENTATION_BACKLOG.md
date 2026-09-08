@@ -47,6 +47,18 @@ The backlog below still lists one issue per NFR either way, but issues in the se
 
 ---
 
+## Three kinds of work — and where each one "lives"
+
+Sorted out concretely while closing out Wave 0's Swagger issue (`NFR-09`), which turned out to span two of these at once and made the distinction worth writing down properly:
+
+| Category | What it means | Example | How it closes |
+|---|---|---|---|
+| **One-time setup** | Real, bounded work — add a dependency, write config, build a script | `NFR-09`'s dependency + base `OpenApiConfig` setup | Closes normally, once, when the work is actually done |
+| **Standing convention** | A rule documented once, then enforced continuously per-PR via checklist — never "done" in the sense of finished, but "established" in the sense of written down and checkable | `NFR-01`, `NFR-14`, `NFR-15`, `NFR-16` (layered architecture, constructor injection, LAZY fetching, no native SQL) | Closes once the convention is *documented in checkable form* — not when compliance is "guaranteed forever," which no issue could actually prove anyway |
+| **Recurring-in-substance work** | Something that will genuinely happen many times across the project, but doesn't get its own issue each time — instead, it's folded into a checklist applied to *every* relevant future issue | Swagger annotations on each new controller, going forward | Never "closes" as its own thing — verified per-PR via checklist, then audited once at the end (Wave 11's `NFR-09` verification pass, `#50`) |
+
+---
+
 ## Issue checklists by work type
 
 Most issues involve one or more of these categories. Pick whichever apply and paste that checklist into the issue when you start it — this is how the "standing convention" NFRs (§ above) actually get enforced per-PR, rather than only existing as an abstract policy nobody checks against.
