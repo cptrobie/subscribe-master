@@ -109,6 +109,7 @@ This project is worked part-time, ad-hoc, whenever time permits — not on a fix
 **Alternatives considered, and why they weren't chosen:**
 - **GitHub Projects custom fields** (native, free, zero migration) — would let "Estimated"/"Actual" live as number fields directly on each issue. Ruled out for two reasons: it isn't open source (a stated preference), and it still requires manual entry with no automatic summation — no real advantage over comments plus a script for that specific gap.
 - **Super Productivity** (open source, installable desktop app, GitHub issue import) — genuinely well-built for estimate-vs-actual tracking, with a native UI for both. Ruled out for two concrete reasons: (1) its GitHub sync is one-directional — issues import in, but no time data writes back out, so the comparison would live in a second, separate system rather than on the issue itself; (2) actual time is captured via a live timer that "only works if the app is open" (confirmed via the project's own docs) — a real liability for ad-hoc work, since forgetting to hit start before a session means that time is simply lost, not just delayed.
+- **A GitHub Projects board grouped by wave** was also considered and prototyped as a script, but ultimately not adopted — judged redundant once `project_time_report.sh` existed, since the report gives more precise information (real hours and variance percentages, not just card position) for less ongoing upkeep (no second system to keep in sync, no custom field to populate by hand).
 
 Staying in `gh`/GitHub keeps the estimate, every session log, and the final total all visible directly on the issue itself — one record, not two — and logging *after* a session ends (rather than needing to remember to start a timer *before* it begins) fits ad-hoc availability better.
 
@@ -116,20 +117,34 @@ Staying in `gh`/GitHub keeps the estimate, every session log, and the final tota
 
 1. **When starting an issue**, log its estimate explicitly (translating the size label into hours once):
 
-`gh issue comment <N> --body "Estimate: ~4h (size-S)"`
+```
+gh issue comment <N> --body "Estimate: ~4h (size-S)"
+```
 
 2. **At the end of each work session** — logged retrospectively, right when you stop, not via a live timer:
 
-`gh issue comment <N> --body "Actual: ~45m — brief note on what got done"`
-Supports `m`, `h`, or combined (`1h 30m`) — see `sum_issue_time.sh` for the exact formats it parses.
+```
+gh issue comment <N> --body "Actual: ~45m — brief note on what got done"
+```
 
-3. **Before closing, to see the running total** rather than summing sessions by hand:
+Supports `m`, `h`, or combined (`1h 30m`) — see `scripts/time_tracking/sum_issue_time.sh` for the exact formats it parses.
+3. **Before closing, to see this issue's running total** rather than summing sessions by hand:
 
-`/sum_issue_time.sh <N>`
+```
+./scripts/time_tracking/sum_issue_time.sh <N>
+```
 
-4. **Close with the total copied in:**
+4. **For the whole-project picture** — every wave subtotaled, fully-closed waves collapsed to one line with variance, the current wave expanded to full per-issue detail:
 
+```
+./scripts/time_tracking/project_time_report.sh
+```
+
+5. **Close with the total copied in:**
+
+```
 gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h estimated (size-S). Closing."
+```
 
 **A note on what "actual" measures here:** these are focused-effort hours, not calendar time. An S-sized (4h) issue might take one evening or might take three scattered sessions over a week and a half — that's availability, not an estimation miss. Don't compare hours against calendar days; compare hours against hours.
 
