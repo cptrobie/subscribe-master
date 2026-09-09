@@ -68,6 +68,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 - [ ] Reads as Clean Code — clear naming, no dead code, no commented-out blocks left in (NFR-10)
 
 **New REST endpoint / controller:**
+- [ ] **(POST with side effects only)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
 - [ ] Swagger/OpenAPI annotations present (NFR-09)
 - [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
 - [ ] Constructor injection only, no field injection (NFR-14)
@@ -177,6 +178,7 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 - `[NFR-19] CI/CD pipeline for build, test, and deploy` — **[M]**
 - `[NFR-22] Time tracking and reporting tooling (estimate vs. actual, per-issue and whole-project)` — **[M]**
 - `[NFR-23] Application logging practice (levels, structure, no secrets/PII)` — **[S]** **(standing)**
+- `[NFR-24] Idempotency on POST endpoints with side effects` — **[S]** **(standing)**
 - `[NFR-09] Set up API documentation (Swagger/OpenAPI)` — **[S]** — start this early so it grows with the API instead of being reconstructed at the end
 - `[NFR-01] Establish layered architecture (Controller → Service → Repository → Entity)` — **[S]** **(standing)**
 - `[NFR-14] Establish constructor-injection-only convention` — **[S]** **(standing)**
