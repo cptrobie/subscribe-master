@@ -72,6 +72,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 - [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
 - [ ] Constructor injection only, no field injection (NFR-14)
 - [ ] Errors bubble up to the global exception handler rather than being caught/formatted locally (NFR-02)
+- [ ] Logging uses SLF4J at appropriate levels; no secrets/PII logged (NFR-23)
 - [ ] Request/response uses DTOs — entities are never returned directly
 
 **New JPA entity / mapping:**
@@ -88,14 +89,16 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 **New service / business logic:**
 - [ ] Business logic lives here, not leaked into the controller (NFR-01)
 - [ ] Constructor injection only (NFR-14)
+- [ ] Logging uses SLF4J at appropriate levels; no secrets/PII logged (NFR-23)
 - [ ] Wrapped in `@Transactional` if it touches money or spans multiple table writes (NFR-03)
 - [ ] Optimistic-lock conflicts are caught and retried where relevant, not left to bubble as a raw 500 (NFR-04)
 - [ ] Writes an `audit_logs` entry if this is the kind of action that should be auditable (NFR-17)
 
 **New scheduled job:**
 - [ ] Uses ShedLock so it can't run concurrently across multiple instances (FR-21)
-- [ ] Outcomes are logged appropriately — `notification_log` if it's a customer-facing notification
 - [ ] Constructor injection only (NFR-14)
+- [ ] Logging uses SLF4J at appropriate levels; no secrets/PII logged (NFR-23)
+- [ ] Outcomes are logged appropriately — `notification_log` if it's a customer-facing notification
 
 **New Flyway migration:**
 - [ ] Placed in `src/main/resources/db/migration/`, correctly named (`Vx__description.sql`, or `R__` for repeatable)
@@ -173,6 +176,7 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 - `[NFR-20] Vault integration for secrets management (all environments, including local dev)` — **[L]**
 - `[NFR-19] CI/CD pipeline for build, test, and deploy` — **[M]**
 - `[NFR-22] Time tracking and reporting tooling (estimate vs. actual, per-issue and whole-project)` — **[M]**
+- `[NFR-23] Application logging practice (levels, structure, no secrets/PII)` — **[S]** **(standing)**
 - `[NFR-09] Set up API documentation (Swagger/OpenAPI)` — **[S]** — start this early so it grows with the API instead of being reconstructed at the end
 - `[NFR-01] Establish layered architecture (Controller → Service → Repository → Entity)` — **[S]** **(standing)**
 - `[NFR-14] Establish constructor-injection-only convention` — **[S]** **(standing)**

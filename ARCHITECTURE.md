@@ -163,6 +163,14 @@ A partial unique index (`uq_notification_log_daily_dedup`) enforces "don't send 
 
 **For ops/support:** "customer says they got the same reminder email twice" is worth investigating as a real bug (this constraint should prevent it) rather than dismissing as expected noise.
 
+### 6.4 Choosing where a new event belongs
+
+When adding a new feature that generates some kind of loggable event, three questions decide where it goes:
+
+- **Is it tied to a specific subscription, and does it recur on a schedule?** → `notification_log`. This is why it's a poor fit for anything account-level (registration, security settings) — its dedup index and FK are both built around `subscription_id`, not `customer_id`.
+- **Is it a security- or compliance-relevant action worth a permanent, queryable record, regardless of subscription?** → `audit_logs`. Email verification sends and 2FA setting changes both landed here for exactly this reason — customer-scoped, security-relevant, no subscription involved.
+- **Otherwise** → plain application logging (`NFR-23`) via SLF4J, at an appropriate level, following the same never-log-secrets rule already established for Vault (§9). This is for developers reading logs, not something the application queries about its own history.
+
 ---
 
 ## 7. Scheduling & operational safety
