@@ -220,6 +220,8 @@ Example of a paused wave with an optional resumption note:
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
 - `[FR-01] User registration endpoint (/auth/register)` — **[S]**
+- `[FR-30] Email verification on registration (send verification link, confirm via endpoint)` — **[L]**
+- `[FR-31] Login blocked until email verified` — **[S]**
 - `[FR-02] User login endpoint (/auth/login)` — **[S]**
 - `[FR-03] Password hashing (BCrypt)` — **[S]**
 - `[FR-04] Per-user data isolation / authorization enforcement` — **[M]**
@@ -281,6 +283,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-19] Payment-due warning notification (log/email)` — **[M]**
 - `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[S]**
 - `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]**
+- `[FR-32] Unverified account cleanup (24h expiry)` — **[M]**
 
 ## Wave 9 — Reporting & statistics
 
