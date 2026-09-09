@@ -166,6 +166,28 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 
 ---
 
+**A note on what "actual" measures here:** these are focused-effort hours, not calendar time. An S-sized (4h) issue might take one evening or might take three scattered sessions over a week and a half — that's availability, not an estimation miss. Don't compare hours against calendar days; compare hours against hours.
+
+---
+
+## Wave status markers
+
+Each wave's heading carries a marker reflecting its actual current state — updated as work genuinely happens, never aspirationally set in advance:
+
+- **(no marker)** — Not started. The default; nothing beyond requirements/design documentation exists yet, even if that documentation is thorough.
+- **🚧 In progress** — Real implementation work has begun (actual code, not just `FR`/`NFR` entries being written).
+- **⏸️ Paused** — Was in progress; work has stopped for now without being complete. Given this project is worked ad-hoc and part-time (see "Time tracking process" above), pausing is expected and normal, not a sign of falling behind schedule — there is no schedule to fall behind. A paused wave differs from "not started" in that real work is already invested; a brief note on roughly where things left off is worth adding if it'll help on resumption, though not mandatory for every pause.
+- **✅ Complete (verified via CI)** — Fully done and verified per this project's usual discipline (see Wave 0). Documentation existing for a wave's requirements is not sufficient for this marker on its own — only real, tested, working code earns it.
+
+Example of a paused wave with an optional resumption note:
+
+```
+## Wave 1 — Authentication core ⏸️ Paused
+*(Paused as of [date] — [brief note on where things left off].)*
+```
+
+---
+
 ## Wave 0 — Project bootstrap ✅ Complete (verified via CI)
 
 **Rationale:** nothing else can be built, tested, or deployed without this. Do this before writing feature code, not alongside it. This wave also absorbs the non-code setup tasks that used to sit in a separate "Environment & Third-Party Setup" bucket in the Overview graph — they're one-time bootstrap work with no real ordering dependency relative to the code-focused items below, so keeping them in a separate wave/node implied a sequencing that didn't actually exist.
@@ -192,7 +214,8 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 - Provision Vault itself for each environment (dev, staging, prod) and configure the auth method (e.g. AppRole) the application will use
 - Create the GitHub Issues for every item in this backlog, titled per the `[ID] Title` convention used throughout this document
 
-## Wave 1 — Authentication core
+## Wave 1 — Authentication core ⏸️ Paused
+*(Paused as of 9/SEP/2026 — FR-01/FR-02 (registration, login) not yet started.)*
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
