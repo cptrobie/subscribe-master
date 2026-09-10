@@ -47,8 +47,8 @@ logs/
 .env
 .env.local
 .env.*.local
-application-local.yml
 application-local.yaml
+application-local.yml
 flyway.local.conf
 
 # --- Vault ---
@@ -60,4 +60,4 @@ flyway.local.conf
 *.pid
 
 # --- Docker ---
-docker-compose.override.yml
+compose.override.yaml
