@@ -43,6 +43,14 @@ Subscribe Master consolidates a customer's paid subscriptions (Netflix, Spotify,
 
 **For ops/support:** "user says their reset link doesn't work" is answered by checking `used_at`/`expires_at` on the relevant token row, not by asking the customer to read the token back to you over the phone (you can't reverse the hash to verify it anyway).
 
+### 2.4 Email verification and the `EmailSender` abstraction
+
+Registration builds a small, genuinely reusable `EmailSender` (backed by Spring's `JavaMailSender`) rather than a throwaway one written just for verification emails. Wave 8's `FR-20` Strategy-pattern notification abstraction calls this same `EmailSender` as its email-channel implementation later — nothing built here gets discarded when Wave 8 arrives.
+
+**For developers:** don't build a second email-sending mechanism for anything else that needs to send email (payment reminders, 2FA codes) — extend or call `EmailSender`, the same way `FR-33`'s 2FA challenge will.
+
+**Why `FR-32` (unverified account cleanup) is scheduled in Wave 8, not here in Wave 1, despite being part of the same feature:** it needs a scheduled job, and `FR-21` (ShedLock, the mechanism that makes a scheduled job safe to run on more than one instance) isn't built until Wave 8. Building the cleanup job now would mean either leaving it unprotected against duplicate execution temporarily, or building ShedLock early just to support one job — both worse than deferring the job itself alongside its actual dependency.
+
 ---
 
 ## 3. Subscription domain
