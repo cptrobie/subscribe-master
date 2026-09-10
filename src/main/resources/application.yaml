@@ -52,5 +52,5 @@ spring:
     # they're picked up automatically and packaged into the built JAR.
 
 # spring.profiles.active is intentionally not set here — provide it externally
-# per environment (SPRING_PROFILES_ACTIVE env var, or docker-compose.yml's
+# per environment (SPRING_PROFILES_ACTIVE env var, or compose.yaml's
 # app service once that exists), not hardcoded in a committed file.

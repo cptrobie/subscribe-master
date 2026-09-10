@@ -13,7 +13,7 @@
 5. Apply a size label (`S`/`M`/`L`) to each issue when you open it, using the rubric below.
 6. Copy the relevant work-type checklist(s) from **"Issue checklists by work type"** below into the issue as a task list, based on what kind of work it actually involves — not every checklist applies to every issue, and most issues will pull from more than one (e.g. a new endpoint usually touches both the "REST endpoint" and "service" checklists).
 7. Create a branch off `main` named `<type>/<id>-<short-kebab-description>`, using the same type vocabulary as commit messages (`feature`, `fix`, `chore`, `docs`) plus the lowercase requirement ID — e.g. `feature/fr-01-user-registration`. The ID alone is enough for traceability; the wave number is deliberately left out of the branch name, since that mapping already lives in this document and would just be a second place to keep in sync if an issue ever moves waves.
-8. Open a pull request against `main` when the work (and its checklist) is done, rather than pushing directly — this is what actually exercises `ci.yml`'s `pull_request` trigger, giving you a CI result to check before merging rather than only discovering a break after it's already on `main`.
+8. Open a pull request against `main` when the work (and its checklist) is done, rather than pushing directly — this is what actually exercises `ci.yaml`'s `pull_request` trigger, giving you a CI result to check before merging rather than only discovering a break after it's already on `main`.
 9. **Merge, don't squash**, when merging the PR. Several of today's Wave 0 commits carried detailed root-cause explanations worth preserving verbatim in history (see the `V4` migration fix, the Testcontainers/Vault debugging) — squashing would collapse that kind of detail into a single message, making it harder to re-trace later.
 
 ---
@@ -40,7 +40,7 @@ The size labels below are a starting estimate made with full context of the sche
 
 Not all NFRs are "features" that get built once and marked done. Splitting them matters for how you actually track them:
 
-- **Discrete, buildable items** — optimistic locking, exception handling, auditing, tracing, caching, CI/CD, Docker Compose, migrations tooling. These get an issue and close normally.
+- **Discrete, buildable items** — optimistic locking, exception handling, auditing, tracing, caching, CI/CD, Compose, migrations tooling. These get an issue and close normally.
 - **Standing conventions, enforced continuously** — layered architecture (NFR-01), code style (NFR-06), Clean Code principles (NFR-10), constructor injection (NFR-14), no eager fetching (NFR-15), no native SQL (NFR-16). These aren't things you build once; they're a definition-of-done applied to *every* PR. Opening an issue for these is still useful (as a place to document the standard and link violations), but "closing" it doesn't mean "compliance is now guaranteed forever" — it means the standard is documented and enforced going forward (e.g. via PR review checklist or a linter/static analysis rule, not a one-time task).
 
 The backlog below still lists one issue per NFR either way, but issues in the second category are marked **(standing)** so nobody expects them to behave like a normal feature ticket.
@@ -194,7 +194,7 @@ Example of a paused wave with an optional resumption note:
 
 **Code / tooling issues:**
 - `[NFR-13] Set up Flyway and wire migrations into the build` — **[M]**
-- `[NFR-12] Docker Compose single-command startup` — **[S]**
+- `[NFR-12] Compose single-command startup` — **[S]**
 - `[NFR-08] Environment-based configuration (dev/prod profiles, no hardcoded secrets)` — **[S]**
 - `[NFR-20] Vault integration for secrets management (all environments, including local dev)` — **[L]**
 - `[NFR-19] CI/CD pipeline for build, test, and deploy` — **[M]**

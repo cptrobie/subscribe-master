@@ -85,7 +85,7 @@
              Versions managed by spring-boot-starter-parent — do not pin explicitly,
              same reasoning as spring-cloud-starter-vault-config above. Used for
              integration tests that provision their own throwaway Postgres/Vault per
-             run, rather than depending on docker-compose.yml already being started
+             run, rather than depending on compose.yaml already being started
              manually. See src/test/.../ApplicationIntegrationIT.java for the
              reference pattern this project follows. -->
         <dependency>

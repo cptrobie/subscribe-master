@@ -4,7 +4,7 @@
 
 **Purpose:** this document explains the *why* behind the database design — not just what tables exist, but the reasoning that shaped them, what you need to keep in mind while building on top of them, and what to monitor once the system is live. It assumes familiarity with relational databases, JPA/Hibernate-style ORMs, and standard backend patterns — it does not re-explain what a foreign key or an index is.
 
-Companion documents (design history, if you want the blow-by-blow): `erd_design_notes.md`, `subscription_erd_design_notes.md`, `billing_retry_refund_design_notes.md`, `gap_closure_design_notes.md`, `subscribe_master_requirements.md`.
+Companion document: `subscribe_master_requirements.md` (the full FR/NFR list with schema-coverage status).
 
 ---
 
@@ -187,9 +187,9 @@ If this application is ever horizontally scaled (multiple instances), the daily 
 
 ## 8. Migration strategy: Flyway, versioned and incremental
 
-Schema changes are delivered as versioned Flyway migrations (`V1`, `V1.1`, `V2`–`V4`, `V6` at the time of writing) plus one repeatable migration (`R__seed_subscription_provider_catalog`), not a single monolithic script. Each migration is scoped to one coherent unit of change (auth foundation, subscriptions, retry/refunds, gap closures, tracing) rather than grouped by when the request happened to arrive. Seed data is deliberately split from schema: foundational reference data tightly coupled to the tables that need it (roles/permissions) lives in its own versioned migration (`V1.1`) right after the schema that creates those tables; catalog data expected to grow independently (the subscription provider list) lives in a repeatable (`R__`) migration instead, which re-runs automatically whenever the file changes — see `V1__init_auth_and_authz.sql` and `R__seed_subscription_provider_catalog.sql` for the reasoning in each file's header comment.
+Schema changes are delivered as versioned Flyway migrations (`V1`, `V1.1`, `V2`–`V4`, `V6`, `V7` at the time of writing) plus one repeatable migration (`R__seed_subscription_provider_catalog`), not a single monolithic script.
 
-**For developers:** once a migration has actually run in any shared environment (staging or production), **never edit it** — write a new `V{n+1}` migration instead, even for a one-line fix. Editing an already-applied migration breaks Flyway's checksum validation and will fail deployments for anyone who already ran it. (Everything up through `V6` in this project has *not* yet been deployed anywhere, which is why earlier fixes in this project's history were made by editing existing migrations rather than adding new ones — that's a one-time luxury of a pre-deployment project, not a pattern to continue once this ships.)
+**For developers:** once a migration has actually run in any shared environment (staging or production), **never edit it** — write a new `V{n+1}` migration instead, even for a one-line fix. Editing an already-applied migration breaks Flyway's checksum validation and will fail deployments for anyone who already ran it. (Everything up through `V7` in this project has *not* yet been deployed anywhere, which is why earlier fixes in this project's history were made by editing existing migrations rather than adding new ones — that's a one-time luxury of a pre-deployment project, not a pattern to continue once this ships.)
 
 **For ops:** `flyway_schema_history` (created automatically by Flyway, not something we modeled) is your source of truth for what's actually been applied to a given environment — check it before assuming an environment is up to date, especially after a failed or interrupted deployment.
 
@@ -210,6 +210,8 @@ Application secrets — database credentials, the Stripe API key, the JWT signin
 
 **A real gotcha worth knowing about: `spring.config.import: vault://` must live in each profile-specific YAML file, not the base `application.yaml`.** Splitting them — the import in the base file, the Vault connection properties (like `spring.cloud.vault.token`) in a profile-specific file — causes a genuine, hard-to-diagnose failure: `Cannot create authentication mechanism for TOKEN`, thrown even when the token property is correctly set. The root cause is a documented Spring Boot Config Data API ordering issue (see [spring-projects/spring-boot PR #49324](https://github.com/spring-projects/spring-boot/pull/49324)) — `spring.config.import` resolves as part of processing the document it's declared in, which can happen before a *different* file's profile-specific properties are merged into the environment. The fix: declare the import in `application-dev.yaml` and `application-prod.yaml` themselves, alongside each profile's own Vault connection config, so both resolve together in the same document, in the correct order. See the comments in those two files for the full explanation. This also introduced one intentional behavior difference between environments: dev uses `optional:vault://` (degrades gracefully if Vault is unreachable), while prod uses a bare `vault://` (fails startup outright — a missing Vault in production should be a loud, immediate failure, not a silent boot without real secrets that fails confusingly downstream).
 
+---
+
 ## 10. Consolidated developer checklist
 
 - [ ] Filter `deleted_at IS NULL` explicitly on every subscription/payment-method query — it's not automatic.
@@ -225,7 +227,7 @@ Application secrets — database credentials, the Stripe API key, the JWT signin
 - [ ] Never commit a Vault token or read a secret from `.env` "just for local dev convenience" — local dev uses Vault the same way staging/prod do.
 - [ ] Any new POST endpoint with a real side effect (creates data, sends an email, eventually charges a card) accepts an `Idempotency-Key` header and checks `idempotency_keys` (`V7`) before re-running that side effect — this is what distinguishes a genuine client retry from a truly new request, and it's what will prevent `FR-30` from sending a duplicate verification email or `FR-12` (Wave 6) from double-charging a card on a network-drop-and-retry.
 
-## 11. Consolidated ops/support/audit monitoring guide
+---
 
 ## 11. Consolidated ops/support/audit monitoring guide
 

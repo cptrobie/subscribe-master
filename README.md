@@ -10,7 +10,7 @@ This project started from a take-home assignment brief and has since grown into 
 
 **Wave 0 — Project bootstrap is complete.** The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with all core dependencies wired and verified working: JPA, PostgreSQL, Flyway, Vault, and Testcontainers.
 
-**Proven working, not just configured:** a GitHub Actions CI pipeline (`.github/workflows/ci.yml`) runs on every push/PR and passes — `SubscribeMasterApplicationIT` boots the full Spring context against ephemeral Testcontainers-managed Postgres and Vault, Flyway migrates the complete schema from scratch, Hibernate validates it, and the datasource credentials resolve correctly from Vault. This all happens automatically, with no manually-started infrastructure required in CI.
+**Proven working, not just configured:** a GitHub Actions CI pipeline (`.github/workflows/ci.yaml`) runs on every push/PR and passes — `SubscribeMasterApplicationIT` boots the full Spring context against ephemeral Testcontainers-managed Postgres and Vault, Flyway migrates the complete schema from scratch, Hibernate validates it, and the datasource credentials resolve correctly from Vault. This all happens automatically, with no manually-started infrastructure required in CI.
 
 **Still not built:** any actual business logic. No entities, repositories, controllers, or real subscription/payment/auth functionality exists yet — Wave 0 was entirely infrastructure and wiring. Wave 1 (Authentication core) is next; see `IMPLEMENTATION_BACKLOG.md`.
 
@@ -39,9 +39,9 @@ This project started from a take-home assignment brief and has since grown into 
    ```
 2. **Start local infrastructure:**
    ```
-   docker compose up -d
+   compose up -d
    ```
-   This starts Postgres (`localhost:5432`) and Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `docker-compose.yml` for why dev mode is safe to hardcode locally but nowhere else).
+   This starts Postgres (`localhost:5432`) and Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `compose.yaml` for why dev mode is safe to hardcode locally but nowhere else).
 3. **Run the database migrations:**
    ```
       flyway -url=jdbc:postgresql://localhost:5432/subscribe_master \
@@ -49,7 +49,7 @@ This project started from a take-home assignment brief and has since grown into 
           -locations=filesystem:src/main/resources/db/migration \
           migrate
    ```
-   This applies every migration in `src/main/resources/db/migration/` in order (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`) and seeds the roles/permissions and subscription provider catalog.
+   This applies every migration in `src/main/resources/db/migration/` in order (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`, `V7`) and seeds the roles/permissions and subscription provider catalog.
 4. **Inspect the result** in pgAdmin 4, or `psql`, to confirm the schema and seed data landed as expected.
 5. **Seed Vault with the database credentials** the app will read at startup. Either method works — the CLI, if installed:
 
@@ -71,8 +71,10 @@ This project started from a take-home assignment brief and has since grown into 
 ```
 .
 ├── src/main/resources/db/migration/     # Flyway schema + seed migrations (source of truth for the DB)
+├── scripts/                             # One-time and recurring project-management scripts (see each subfolder)
 ├── subscribe_master_erd.drawio          # Entity-relationship diagram (open in draw.io / app.diagrams.net)
-├── docker-compose.yml                   # Local Postgres + Vault (dev mode)
+├── login_2fa_sequence.md                # Login/2FA design sequence diagram (mermaid) — will move to a dedicated folder once there are a few more of these
+├── compose.yaml                         # Local Postgres + Vault (dev mode)
 ├── ARCHITECTURE.md                      # Design decisions, dev/ops guidance
 ├── subscribe_master_requirements.md     # Functional/non-functional requirements, with schema coverage status
 ├── IMPLEMENTATION_BACKLOG.md            # GitHub issue backlog, wave-based prioritization, sizing
@@ -90,6 +92,7 @@ This project started from a take-home assignment brief and has since grown into 
 | `IMPLEMENTATION_BACKLOG.md` | The GitHub issue backlog: one issue per requirement, sequenced into waves, sized S/M/L |
 | `COMMON_QUERIES.md` | Practical SQL for the questions that come up repeatedly against this schema |
 | `subscribe_master_erd.drawio` | The entity-relationship diagram, with a legend explaining the color-coded domain sections |
+| `login_2fa_sequence.md` | Sequence diagram and key decisions for the login/2FA design, ahead of formal `FR-33`/`FR-34` requirements |
 
 
 ---
@@ -105,7 +108,7 @@ This project started from a take-home assignment brief and has since grown into 
 | Flyway | Database migrations |
 | HashiCorp Vault | Secrets management, all environments including local dev |
 | Stripe | Payment processing |
-| Docker / Docker Compose | Local infrastructure |
+| Docker / Compose | Local infrastructure |
 
 (Additional libraries — MapStruct, Resilience4j, Apache POI, springdoc-openapi — get added as the relevant features are built; see `IMPLEMENTATION_BACKLOG.md` for when.)
 
