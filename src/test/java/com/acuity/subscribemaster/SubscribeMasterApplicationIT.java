@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -59,7 +59,7 @@ class SubscribeMasterApplicationIT {
   private static final String VAULT_TOKEN = "test-root-token";
 
   @Container
-  static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+  static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine")
           .withDatabaseName("subscribe_master")
           .withUsername("subscribe_master")
           .withPassword("test_only_not_a_real_secret");

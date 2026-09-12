@@ -10,18 +10,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class OpenApiConfig {
 
-    @Bean
-    OpenAPI subscribeMasterOpenApi() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("Subscribe Master API")
-                        .description("Subscription management, payments, and billing API")
-                        .version("0.0.1-SNAPSHOT")
-                        .contact(new Contact()
-                                .name("API Support Team")
-                                .email("support@example.com"))
-                        .license(new License()
-                                .name("Apache 2.0")
-                                .url("https://apache.org")));
-    }
+  @Bean
+  OpenAPI subscribeMasterOpenApi() {
+    return new OpenAPI()
+        .info(
+            new Info()
+                .title("Subscribe Master API")
+                .description("Subscription management, payments, and billing API")
+                .version("0.0.1-SNAPSHOT")
+                .contact(new Contact().name("API Support Team").email("support@example.com"))
+                .license(new License().name("Apache 2.0").url("https://apache.org")));
+  }
 }
