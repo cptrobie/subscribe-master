@@ -214,8 +214,10 @@ Example of a paused wave with an optional resumption note:
 - Provision Vault itself for each environment (dev, staging, prod) and configure the auth method (e.g. AppRole) the application will use
 - Create the GitHub Issues for every item in this backlog, titled per the `[ID] Title` convention used throughout this document
 
-## Wave 1 — Authentication core ⏸️ Paused
-*(Paused as of 9/SEP/2026 — FR-01/FR-02 (registration, login) not yet started.)*
+---
+
+## Wave 1 — Authentication core 🚧 In progress
+*(Started 10/SEP/2026 — beginning with FR-01, registration.)*
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
