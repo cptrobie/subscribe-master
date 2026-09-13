@@ -128,6 +128,30 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Resolves mockito-core's jar path into a ${groupId:artifactId:type}
+                 property so it can be loaded as a proper -javaagent below, instead
+                 of Mockito self-attaching at runtime (deprecated by the JDK; see
+                 the warning Mockito prints without this). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- @{argLine} (not ${argLine}) so this chains onto the argLine
+                 jacoco-maven-plugin's prepare-agent sets, rather than replacing it. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
             <!-- Runs *IT.java classes during mvn verify (not mvn test) — the
             standard Maven convention: Surefire runs *Test/*Tests during
             the test phase, Failsafe runs *IT during integration-test/
@@ -136,6 +160,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

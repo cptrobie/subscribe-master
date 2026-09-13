@@ -7,7 +7,11 @@ import java.util.UUID;
 /** Registration response body. Never carries the password hash or the raw token. */
 @Schema(name = "RegistrationResponse")
 public record RegistrationResponse(
-    UUID id, String email, boolean emailVerified, Instant createdAt, String message) {
+    UUID id,
+    String email,
+    @Schema(example = "false") boolean emailVerified,
+    Instant createdAt,
+    String message) {
 
   public static RegistrationResponse accepted(
       UUID id, String email, boolean emailVerified, Instant createdAt) {

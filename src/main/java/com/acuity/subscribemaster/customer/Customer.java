@@ -57,6 +57,19 @@ public class Customer {
     this.email = email;
     this.passwordHash = passwordHash;
   }
+  /**
+   * Test-support constructor only -- lets test code set a known, predictable id directly.
+   * Never call this from production code: {@code id} is meant to come exclusively from
+   * {@code @UuidGenerator}, and bypassing that here means the caller is choosing a
+   * customer's identity rather than letting Hibernate generate one.
+   */
+  public Customer(UUID id, String email, String passwordHash, boolean emailVerified, boolean active) {
+    this.id = id;
+    this.email = email;
+    this.passwordHash = passwordHash;
+    this.emailVerified = emailVerified;
+    this.active = active;
+  }
 
   /** Marks the account verified (FR-31 will gate login on this; out of scope here). */
   public void markEmailVerified() {
