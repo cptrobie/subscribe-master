@@ -68,6 +68,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 - [ ] Reads as Clean Code — clear naming, no dead code, no commented-out blocks left in (NFR-10)
 
 **New REST endpoint / controller:**
+- [ ] Path is prefixed with a version segment (`/api/v1/...`), not bare (NFR-25)
 - [ ] **(POST with side effects only)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
 - [ ] Swagger/OpenAPI annotations present (NFR-09)
 - [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
@@ -166,10 +167,6 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 
 ---
 
-**A note on what "actual" measures here:** these are focused-effort hours, not calendar time. An S-sized (4h) issue might take one evening or might take three scattered sessions over a week and a half — that's availability, not an estimation miss. Don't compare hours against calendar days; compare hours against hours.
-
----
-
 ## Wave status markers
 
 Each wave's heading carries a marker reflecting its actual current state — updated as work genuinely happens, never aspirationally set in advance:
@@ -201,6 +198,7 @@ Example of a paused wave with an optional resumption note:
 - `[NFR-22] Time tracking and reporting tooling (estimate vs. actual, per-issue and whole-project)` — **[M]**
 - `[NFR-23] Application logging practice (levels, structure, no secrets/PII)` — **[S]** **(standing)**
 - `[NFR-24] Idempotency on POST endpoints with side effects` — **[S]** **(standing)**
+- `[NFR-25] URL path versioning on all REST endpoints` — **[S]** **(standing)**
 - `[NFR-09] Set up API documentation (Swagger/OpenAPI)` — **[S]** — start this early so it grows with the API instead of being reconstructed at the end
 - `[NFR-01] Establish layered architecture (Controller → Service → Repository → Entity)` — **[S]** **(standing)**
 - `[NFR-14] Establish constructor-injection-only convention` — **[S]** **(standing)**
