@@ -34,7 +34,7 @@
              against an application that's still an empty shell would fail every
              build for the wrong reason. Flip this to 'false' once Wave 1 has real
              business logic and tests for the threshold to be meaningful against. -->
-        <jacoco.check.skip>true</jacoco.check.skip>
+        <jacoco.check.skip>false</jacoco.check.skip>
     </properties>
     <dependencies>
         <dependency>
