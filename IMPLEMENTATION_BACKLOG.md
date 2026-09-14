@@ -64,8 +64,10 @@ Sorted out concretely while closing out Wave 0's Swagger issue (`NFR-09`), which
 Most issues involve one or more of these categories. Pick whichever apply and paste that checklist into the issue when you start it — this is how the "standing convention" NFRs (§ above) actually get enforced per-PR, rather than only existing as an abstract policy nobody checks against.
 
 **Always applies, every issue, no exceptions:**
-- [ ] Code style follows the Google Java Style Guide (NFR-06)
+- [ ] Code style follows the Google Java Style Guide (NFR-06) — enforced by `mvn spotless:check`, see note below
 - [ ] Reads as Clean Code — clear naming, no dead code, no commented-out blocks left in (NFR-10)
+
+**On `NFR-06` enforcement, specifically:** Spotless (Google Java Format) is wired into `verify`, scoped via `ratchetFrom origin/main` to only files that changed since the last merge — existing, untouched files stay exempt indefinitely, so adopting the tool didn't require a one-time reformatting pass across the whole codebase. Run `mvn spotless:apply` to auto-fix formatting on whatever you've changed before committing, or `mvn spotless:check` to just see violations without fixing them. **No manual tracking of "which files still need reformatting" is needed or maintained** — every file eventually gets touched for some other reason over the life of the project, and gets swept into compliance at that point as a natural byproduct, not a separate task.
 
 **New REST endpoint / controller:**
 - [ ] Path is prefixed with a version segment (`/api/v1/...`), not bare (NFR-25)
