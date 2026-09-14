@@ -30,12 +30,18 @@ jobs:
           cache: maven
 
       - name: Build and run all tests (unit + integration)
-        # mvn verify runs the full lifecycle proven locally: Surefire
-        # (SubscribeMasterApplicationTests, infra-free smoke test) during
-        # the test phase, then Failsafe (SubscribeMasterApplicationIT)
-        # during integration-test/verify — which provisions its own
-        # Postgres and Vault via Testcontainers, migrates the schema with
-        # Flyway, validates it with Hibernate, and resolves the datasource
-        # credentials from Vault. Same command, same result as running it
-        # locally — nothing CI-specific needed.
+        # mvn verify runs the full lifecycle proven locally: Surefire runs
+        # every unit test (AuthServiceTest, etc. — no infrastructure
+        # needed), then Failsafe runs SubscribeMasterApplicationIT and
+        # AuthControllerIT during integration-test/verify — both provision
+        # their own Postgres (and, for SubscribeMasterApplicationIT, Vault
+        # too) via Testcontainers, migrate the schema with Flyway, and
+        # validate it with Hibernate. Same command, same result as running
+        # it locally — nothing CI-specific needed.
+        #
+        # SubscribeMasterApplicationTests (an infra-free smoke test) was
+        # deleted once real JPA-repository-backed beans entered the
+        # application's core wiring, making "full context, zero database"
+        # structurally impossible — SubscribeMasterApplicationIT is now
+        # the sole context-boot verification.
         run: ./mvnw -B verify
