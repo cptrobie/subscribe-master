@@ -51,6 +51,13 @@ spring:
     # (classpath:db/migration, i.e. src/main/resources/db/migration/), so
     # they're picked up automatically and packaged into the built JAR.
 
+app:
+  session:
+    duration-hours: 12
+  login-lockout:
+    max-attempts: 5
+    duration-minutes: 15
+
 # spring.profiles.active is intentionally not set here — provide it externally
 # per environment (SPRING_PROFILES_ACTIVE env var, or compose.yaml's
 # app service once that exists), not hardcoded in a committed file.

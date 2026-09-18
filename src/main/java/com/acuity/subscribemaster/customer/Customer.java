@@ -36,10 +36,16 @@ public class Customer {
   private String passwordHash;
 
   @Column(name = "email_verified", nullable = false)
-  private boolean emailVerified = false;
+  private boolean isEmailVerified = false;
 
   @Column(name = "is_active", nullable = false)
-  private boolean active = true;
+  private boolean isActive = true;
+
+  @Column(name = "failed_login_attempts", nullable = false)
+  private int failedLoginCount = 0;
+
+  @Column(name = "locked_until")
+  private Instant lockedUntil;
 
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
@@ -57,23 +63,25 @@ public class Customer {
     this.email = email;
     this.passwordHash = passwordHash;
   }
+
   /**
-   * Test-support constructor only -- lets test code set a known, predictable id directly.
-   * Never call this from production code: {@code id} is meant to come exclusively from
-   * {@code @UuidGenerator}, and bypassing that here means the caller is choosing a
-   * customer's identity rather than letting Hibernate generate one.
+   * Test-support constructor only -- lets test code set a known, predictable id directly. Never
+   * call this from production code: {@code id} is meant to come exclusively from
+   * {@code @UuidGenerator}, and bypassing that here means the caller is choosing a customer's
+   * identity rather than letting Hibernate generate one.
    */
-  public Customer(UUID id, String email, String passwordHash, boolean emailVerified, boolean active) {
+  public Customer(
+      UUID id, String email, String passwordHash, boolean emailVerified, boolean active) {
     this.id = id;
     this.email = email;
     this.passwordHash = passwordHash;
-    this.emailVerified = emailVerified;
-    this.active = active;
+    this.isEmailVerified = emailVerified;
+    this.isActive = active;
   }
 
   /** Marks the account verified (FR-31 will gate login on this; out of scope here). */
   public void markEmailVerified() {
-    this.emailVerified = true;
+    this.isEmailVerified = true;
   }
 
   public UUID getId() {
@@ -88,12 +96,28 @@ public class Customer {
     return passwordHash;
   }
 
-  public boolean isEmailVerified() {
-    return emailVerified;
+  public boolean getIsEmailVerified() {
+    return isEmailVerified;
   }
 
-  public boolean isActive() {
-    return active;
+  public boolean getIsActive() {
+    return isActive;
+  }
+
+  public int getFailedLoginCount() {
+    return failedLoginCount;
+  }
+
+  public void setFailedLoginCount(int failedLoginCount) {
+    this.failedLoginCount = failedLoginCount;
+  }
+
+  public Instant getLockedUntil() {
+    return lockedUntil;
+  }
+
+  public void setLockedUntil(Instant lockedUntil) {
+    this.lockedUntil = lockedUntil;
   }
 
   public Instant getCreatedAt() {

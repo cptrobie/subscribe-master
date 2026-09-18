@@ -8,18 +8,13 @@ import java.util.UUID;
 @Schema(name = "RegistrationResponse")
 public record RegistrationResponse(
     UUID id,
-    String email,
+    @Schema(example = "addme@example.com") String email,
     @Schema(example = "false") boolean emailVerified,
     Instant createdAt,
     String message) {
 
   public static RegistrationResponse accepted(
       UUID id, String email, boolean emailVerified, Instant createdAt) {
-    return new RegistrationResponse(
-        id,
-        email,
-        emailVerified,
-        createdAt,
-        "Account created.");
+    return new RegistrationResponse(id, email, emailVerified, createdAt, "Account created.");
   }
 }
