@@ -1,4 +1,4 @@
-package com.acuity.subscribemaster.customer;
+package com.acuity.subscribemaster.auth;
 
 import java.util.List;
 import java.util.UUID;

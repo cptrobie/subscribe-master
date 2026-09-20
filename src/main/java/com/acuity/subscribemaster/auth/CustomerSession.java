@@ -1,4 +1,4 @@
-package com.acuity.subscribemaster.customer;
+package com.acuity.subscribemaster.auth;
 
 import jakarta.persistence.*;
 import java.time.Instant;

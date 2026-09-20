@@ -251,6 +251,27 @@ Example of a paused wave with an optional resumption note:
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
 
+## Wave 4.5 — Module boundary hardening (modulith)
+
+*(Setup: the `wave-4.5` label already exists — created 2026-09-20 via `scripts/one_time/wave_4.5_nfr_add.sh`'s label-creation step, run ad hoc before the script itself was written down; the script is the accurate record of that action. The six NFR issues below have not yet been created.)*
+
+**Rationale:** deliberately not done sooner. Three domains exist by the end of Wave 2 (`auth`, `customer`, the RBAC/staff pieces of authorization) — enough to name one real violation (`AuthService` reaching directly into `CustomerRepository`/`Customer`), but not enough to learn the lesson a module-boundary exercise is actually for. By the end of Wave 4, Subscription Management (core + extensions) exists alongside them — a fourth domain with its own real interactions (subscriptions reference customers; authorization gates actions across both) — genuinely representative of the kind of cross-domain friction this exercise is meant to teach, not a toy example manufactured to justify doing it. This trade-off is accepted deliberately: this project's goal is depth of practice, not minimizing calendar time (see `README.md`). Three justifications, in order of weight:
+
+1. **Enough real coupling to make the lesson genuine, not theoretical.** One cross-domain violation (Wave 1–2) teaches "add a facade." Four interacting domains (through Wave 4) teaches the actual judgment call a module boundary is for — deciding what's API versus internal when more than one plausible caller exists.
+2. **Still early enough that the retrofit stays bounded.** ~4 domains' worth of coupling to unwind, not the 10+ the full roadmap eventually has.
+3. **Every domain built after this wave gets the pattern for free.** Waves 5–11 (currency, payments, resilience, scheduling, reporting, observability) are built *with* enforced boundaries and domain-partitioned schema from their first migration, rather than accumulating the same debt this wave pays down for Waves 1–4.
+
+Full reasoning, including the estimated cost of delaying further and the specific coupling violation this wave fixes, is in `ARCHITECTURE.md` §13.
+
+**Scope note:** package-level module boundaries within the existing single Maven artifact and single Postgres instance — not a multi-module Maven build, not separate databases, not a microservice extraction. See `NFR-29`'s notes for the explicit database-scope boundary.
+
+- `[NFR-26] Domain module boundaries (package encapsulation)` — **[M]**
+- `[NFR-27] Module boundary enforcement tooling (Spring Modulith verification)` — **[M]** **(standing)**
+- `[NFR-28] Event-driven cross-module communication convention` — **[M]** **(standing)**
+- `[NFR-29] Domain-partitioned database schema` — **[L]** **(standing)**
+- `[NFR-30] Domain metadata (\`domain:*\` labels) on GitHub issues` — **[S]**
+- `[NFR-31] ERD domain-partitioning update` — **[S]**
+
 ## Wave 5 — Currency conversion
 
 **Rationale:** needed before payments can display/report meaningfully in the customer's base currency, but doesn't block subscription CRUD itself — can run in parallel with Wave 3/4 if you have the capacity.
@@ -320,7 +341,7 @@ Example of a paused wave with an optional resumption note:
 
 Since the goal here is to actually build out and practice each domain area properly — not race a deadline — the waves above double as natural checkpoints rather than "must-have vs. cuttable" scope:
 
-- **Waves 0–6** form a legitimate first milestone: a working end-to-end flow (register/login → manage subscriptions → convert currency → record a payment). Reaching this is a good point to pause, verify the foundational patterns (layered architecture, RBAC, optimistic locking, the snapshot pattern) actually feel right in practice, and adjust before building further on top of them.
+- **Waves 0–6** form a legitimate first milestone: a working end-to-end flow (register/login → manage subscriptions → convert currency → record a payment). Reaching this is a good point to pause, verify the foundational patterns (layered architecture, RBAC, optimistic locking, the snapshot pattern) actually feel right in practice, and adjust before building further on top of them. (Wave 4.5, inserted mid-milestone, is exactly this kind of deliberate pause formalized into its own wave — see its rationale for why module-boundary hardening specifically earned that treatment rather than just a note here.)
 - **Waves 7–9** (retry/refunds, scheduling/notifications, reporting/statistics) are where the more distinctive enterprise patterns live — dunning logic, distributed-lock-safe scheduling, financial reporting. These are worth their own deliberate pass rather than being treated as optional extras, since they're likely a big part of what made this worth building as a multi-domain exercise in the first place.
 - **Waves 10–11** (observability, audit, and the quality-gate NFRs) are the kind of thing that's easy to bolt on convincingly at a small scale but genuinely hard to get right — that gap is itself worth experiencing deliberately rather than skipping.
 
