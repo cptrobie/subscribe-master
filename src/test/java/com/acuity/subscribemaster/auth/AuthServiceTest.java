@@ -8,8 +8,6 @@ import static org.mockito.Mockito.*;
 import com.acuity.subscribemaster.auditlog.AuditLogService;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
-import com.acuity.subscribemaster.customer.CustomerSession;
-import com.acuity.subscribemaster.customer.CustomerSessionRepository;
 import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

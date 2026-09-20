@@ -5,8 +5,6 @@ import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
-import com.acuity.subscribemaster.customer.CustomerSession;
-import com.acuity.subscribemaster.customer.CustomerSessionRepository;
 import com.acuity.subscribemaster.support.EmailMasker;
 import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;

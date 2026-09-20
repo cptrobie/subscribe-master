@@ -8,7 +8,6 @@ import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.CustomerRepository;
-import com.acuity.subscribemaster.customer.CustomerSessionRepository;
 import com.acuity.subscribemaster.error.ApiError;
 import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;

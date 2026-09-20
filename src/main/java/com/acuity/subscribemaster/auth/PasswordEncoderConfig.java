@@ -1,4 +1,4 @@
-package com.acuity.subscribemaster.config;
+package com.acuity.subscribemaster.auth;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
