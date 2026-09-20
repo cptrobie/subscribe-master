@@ -179,6 +179,14 @@ When adding a new feature that generates some kind of loggable event, three ques
 - **Is it a security- or compliance-relevant action worth a permanent, queryable record, regardless of subscription?** → `audit_logs`. Email verification sends and 2FA setting changes both landed here for exactly this reason — customer-scoped, security-relevant, no subscription involved.
 - **Otherwise** → plain application logging (`NFR-23`) via SLF4J, at an appropriate level, following the same never-log-secrets rule already established for Vault (§9). This is for developers reading logs, not something the application queries about its own history.
 
+### 6.5 Grafana as the dashboard/alerting layer over existing tables, not a fourth logging concern
+
+`NFR-32` adds Grafana, but deliberately doesn't add a fourth table or a fourth "kind" of logging alongside the three above — it's a visualization/alerting layer over data these tables *already* collect. §11's ops/support/audit monitoring guide names 11 conditions worth watching (stuck payment retries, optimistic-lock spikes, stale `shedlock` rows, Vault seal state, `audit_logs` integrity checks, and the rest); every one of them reads from `audit_logs`, `trace_spans`, `payment_history`, `shedlock`, or a Vault health check — tables and checks this document already specifies. Grafana's built-in PostgreSQL data source queries them directly, turning §11 from a checklist a human runs SQL against into actual dashboards and alert rules.
+
+**Deliberately not bundled with this:** migrating `app_logs`/`trace_spans` to external tooling (Loki/Tempo, per §6.2's existing trade-off) is a separate, later decision, gated on the volume trigger §12 already describes — `NFR-32` queries them in place, in Postgres, exactly as they're modeled today. Adding Grafana doesn't change when that migration becomes necessary; it just means the migration, whenever it happens, swaps Grafana's data source rather than introducing dashboards for the first time.
+
+**For ops:** once `NFR-32` lands, §11's conditions should be read as "which dashboard/alert to check," not "which query to write by hand" — if you find yourself manually querying Postgres for something on that list, that's a sign the corresponding dashboard/alert is missing or broken, not that this document expects manual querying as normal practice.
+
 ---
 
 ## 7. Scheduling & operational safety
