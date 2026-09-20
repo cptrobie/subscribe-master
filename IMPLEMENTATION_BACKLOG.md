@@ -325,6 +325,7 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-07] Auditing timestamps` — **[S]** **(standing — apply as each table is built, not as a separate pass)**
 - `[NFR-17] Audit logging of actor actions` — **[M]**
 - `[NFR-18] Distributed / request tracing` — **[M]**
+- `[NFR-32] Operational dashboards and alerting (Grafana)` — **[M]** — depends on `NFR-17`/`NFR-18` existing first (dashboards need data to show); turns `ARCHITECTURE.md` §11's monitoring guide from a manual-SQL checklist into actual dashboards/alert rules
 
 ## Wave 11 — Quality gate (release readiness)
 
