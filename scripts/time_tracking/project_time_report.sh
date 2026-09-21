@@ -58,6 +58,10 @@ def fmt(minutes):
     return f"{m}m"
 
 
+def fmt_wave(n):
+    return str(int(n)) if n == int(n) else str(n)
+
+
 SIZE_HOURS = {"size-S": 4, "size-M": 12, "size-L": 24}
 
 waves = {}
@@ -68,7 +72,7 @@ for issue in issues_meta:
     wave_num = None
     for label in labels:
         if label.startswith("wave-"):
-            wave_num = int(label.split("-")[1])
+            wave_num = float(label.split("-")[1])
             break
     if wave_num is None:
         continue
@@ -141,9 +145,9 @@ for wave_num in sorted(waves.keys()):
             pct = (abs(diff) / wave_estimate) * 100
             direction = "over" if diff > 0 else "under"
             variance_str = f"  ({fmt(abs(diff))} {direction}, {pct:.0f}%)"
-        print(f"Wave {wave_num} subtotal: est {fmt(wave_estimate) if wave_estimate else 'n/a'}, actual {fmt(wave_actual) if wave_actual else '0h 0m'}{variance_str}  CLOSED")
+        print(f"Wave {fmt_wave(wave_num)} subtotal: est {fmt(wave_estimate) if wave_estimate else 'n/a'}, actual {fmt(wave_actual) if wave_actual else '0h 0m'}{variance_str}  CLOSED")
     else:
-        print(f"Wave {wave_num}")
+        print(f"Wave {fmt_wave(wave_num)}")
         for item in items:
             est_str = fmt(item["estimate"]) if item["estimate"] else "none"
 
@@ -162,7 +166,7 @@ for wave_num in sorted(waves.keys()):
 
             print(f"  #{item['number']:<4} {item['title'][:45]:<45} est {est_str:<8} actual {act_str:<10}{variance_str}  {item['state']}")
 
-        print(f"  Wave {wave_num} subtotal: est {fmt(wave_estimate) if wave_estimate else 'n/a'}, actual {fmt(wave_actual) if wave_actual else '0h 0m'}")
+        print(f"  Wave {fmt_wave(wave_num)} subtotal: est {fmt(wave_estimate) if wave_estimate else 'n/a'}, actual {fmt(wave_actual) if wave_actual else '0h 0m'}")
 
     print("")
 
