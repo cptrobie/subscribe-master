@@ -8,7 +8,7 @@ import static org.mockito.Mockito.*;
 import com.acuity.subscribemaster.auditlog.AuditLogService;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
-import com.acuity.subscribemaster.support.Tokens;
+import com.acuity.subscribemaster.support.JwtIssuer;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -30,7 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AuthServiceTest {
 
   @Mock private CustomerRepository customerRepo;
-  @Mock private CustomerSessionRepository sessionRepo;
+  @Mock private JwtIssuer jwtIssuer;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private AuditLogService auditLogService;
 
@@ -41,10 +41,9 @@ class AuthServiceTest {
     authService =
         new AuthService(
             customerRepo,
-            sessionRepo,
+            jwtIssuer,
             passwordEncoder,
             auditLogService,
-            12L, // sessionDurationHours
             5, // maxLoginAttempts
             15); // lockoutDurationMinutes
   }
@@ -59,9 +58,6 @@ class AuthServiceTest {
     var customerId = UUID.randomUUID();
     var createdAt = Instant.now();
 
-    // Customer has no constructor/setter for createdAt -- it's Hibernate-managed
-    // via @CreationTimestamp -- so reflection is the only way to simulate a
-    // persisted row's real timestamp here.
     var savedCustomer = new Customer(customerId, email, encodedPassword, false, true);
     ReflectionTestUtils.setField(savedCustomer, "createdAt", createdAt);
 
@@ -166,46 +162,28 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
     var customerId = UUID.randomUUID();
-    var rawToken = Tokens.generate();
-    var hashedToken = Tokens.hash(rawToken);
-    var userAgent = "dummy_agent";
-    var createdAt = Instant.now();
-    var expiresAt = Instant.now().plus(3L, ChronoUnit.MINUTES);
+    var issuedExpiresAt = Instant.now().plus(5L, ChronoUnit.MINUTES);
+    var issuedToken = new JwtIssuer.IssuedToken("fake.jwt.token", issuedExpiresAt);
 
     // Customer has no constructor/setter for createdAt -- it's Hibernate-managed
     // via @CreationTimestamp -- so reflection is the only way to simulate a
     // persisted row's real timestamp here.
     var loggedInCustomer = new Customer(customerId, email, encodedPassword, false, true);
-    ReflectionTestUtils.setField(loggedInCustomer, "createdAt", createdAt);
 
     when(customerRepo.findByEmail(email)).thenReturn(Optional.of(loggedInCustomer));
     when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
+    when(jwtIssuer.issue(customerId)).thenReturn(issuedToken);
 
     // Act
-    var response = authService.login(email, rawPassword, userAgent, ipAddress);
+    var response = authService.login(email, rawPassword, ipAddress);
 
     // Assert: response reflects a real, freshly-generated token and the session's expiry
     assertThat(response.email()).isEqualTo(email);
     assertThat(response.token()).isNotBlank();
+    assertThat(response.expiresAt()).isEqualTo(issuedToken.expiresAt());
 
-    // Assert: the session actually saved to the repository carries the HASH, not the raw
-    // token -- capture what was passed to save(), don't just trust the response
-    var sessionCaptor = ArgumentCaptor.forClass(CustomerSession.class);
-    verify(sessionRepo).save(sessionCaptor.capture());
-    var savedSession = sessionCaptor.getValue();
-
-    assertThat(savedSession.getCustomerId()).isEqualTo(customerId);
-    assertThat(savedSession.getIpAddress()).isEqualTo(ipAddress);
-    assertThat(savedSession.getUserAgent()).isEqualTo(userAgent);
-
-    // The response's raw token, hashed, must match what actually got persisted --
-    // proves the SAME token is both saved (hashed) and returned (raw), not two
-    // different values.
-    assertThat(Tokens.hash(response.token())).isEqualTo(savedSession.getSessionToken());
-
-    // Assert: response's expiresAt matches the session's real expiry, not the
-    // account's createdAt (the exact bug this test exists to guard against)
-    assertThat(response.expiresAt()).isEqualTo(savedSession.getExpiresAt());
+    // Assert: the customer's own ID is what gets passed to the issuer
+    verify(jwtIssuer).issue(customerId);
 
     // Assert: successful login resets both lockout-tracking fields
     assertThat(loggedInCustomer.getFailedLoginCount()).isEqualTo(0);
@@ -218,17 +196,16 @@ class AuthServiceTest {
     var email = "test@example.com";
     var rawPassword = "easyPassword!#123";
     var ipAddress = "192.168.0.1";
-    var userAgent = "dummy_agent";
 
     when(customerRepo.findByEmail(email)).thenReturn(Optional.empty());
 
     // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, rawPassword, userAgent, ipAddress))
+    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
         .isInstanceOf(InvalidCredentialsException.class);
 
-    // Assert: the rejection short-circuits cleanly -- no session created, no password
+    // Assert: the rejection short-circuits cleanly -- no JWT issued, no password
     // comparison attempted (there's no real customer/password hash to compare against)
-    verify(sessionRepo, never()).save(any());
+    verify(jwtIssuer, never()).issue(any());
     verify(passwordEncoder, never()).matches(anyString(), anyString());
   }
 
@@ -241,15 +218,13 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
     var customerId = UUID.randomUUID();
-    var userAgent = "dummy_agent";
-
     var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
 
     when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
     when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
 
     // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, wrongPassword, userAgent, ipAddress))
+    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
         .isInstanceOf(InvalidCredentialsException.class);
 
     // Assert: that the failedloginCount gets incremented, but since it has not met the
@@ -271,7 +246,6 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
     var customerId = UUID.randomUUID();
-    var userAgent = "dummy_agent";
     var failedLoginCountThresholdValue = 5;
     var lockedUntil = Instant.now().plus(15L, ChronoUnit.MINUTES);
 
@@ -282,7 +256,7 @@ class AuthServiceTest {
     when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
 
     // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, wrongPassword, userAgent, ipAddress))
+    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
         .isInstanceOf(AccountLockedException.class);
 
     // Assert: that the failedloginCount matches the threshold value and sets the lockedUntil value
@@ -309,7 +283,6 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
     var customerId = UUID.randomUUID();
-    var userAgent = "dummy_agent";
     var lockedUntil =
         Instant.now()
             .plus(14L, ChronoUnit.MINUTES); // assume one minute has passed since originally set
@@ -320,7 +293,7 @@ class AuthServiceTest {
     when(customerRepo.findByEmail(email)).thenReturn(Optional.of(lockedCustomerAccount));
 
     // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, rawPassword, userAgent, ipAddress))
+    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
         .isInstanceOf(AccountLockedException.class);
 
     assertThat(lockedCustomerAccount.getLockedUntil())
@@ -344,17 +317,19 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
     var customerId = UUID.randomUUID();
-    var userAgent = "dummy_agent";
     var lockedExpireTime = Instant.now().minus(30L, ChronoUnit.SECONDS); // "some" time in the past
 
     var retryCustomer = new Customer(customerId, email, encodedPassword, false, true);
     ReflectionTestUtils.setField(retryCustomer, "lockedUntil", lockedExpireTime);
+    var issuedToken =
+        new JwtIssuer.IssuedToken("fake.jwt.token", Instant.now().plus(15L, ChronoUnit.MINUTES));
 
     when(customerRepo.findByEmail(email)).thenReturn(Optional.of(retryCustomer));
     when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
+    when(jwtIssuer.issue(customerId)).thenReturn(issuedToken);
 
     // Act
-    var response = authService.login(email, rawPassword, userAgent, ipAddress);
+    var response = authService.login(email, rawPassword, ipAddress);
 
     // Assert: successful login resets both lockout-tracking fields
     assertThat(retryCustomer.getFailedLoginCount()).isEqualTo(0);

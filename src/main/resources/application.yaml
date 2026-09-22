@@ -52,8 +52,8 @@ spring:
     # they're picked up automatically and packaged into the built JAR.
 
 app:
-  session:
-    duration-hours: 12
+  jwt:
+    access-token-duration-minutes: 15
   login-lockout:
     max-attempts: 5
     duration-minutes: 15

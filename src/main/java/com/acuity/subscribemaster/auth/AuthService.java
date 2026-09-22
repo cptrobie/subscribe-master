@@ -6,7 +6,7 @@ import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.support.EmailMasker;
-import com.acuity.subscribemaster.support.Tokens;
+import com.acuity.subscribemaster.support.JwtIssuer;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -19,8 +19,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Registration and login business logic (FR-01, FR-02): create the customer, hash the password
- * (FR-03), record a REGISTERED audit_logs entry on registration (NFR-17), and issue a session on
- * successful login.
+ * (FR-03), record a REGISTERED audit_logs entry on registration (NFR-17), and issue a signed JWT
+ * (RS256) on successful login.
+ *
+ * <p><b>JWT, not opaque DB-backed sessions.</b> The original implementation used opaque, hashed
+ * session tokens (customer_sessions), inferred from that table's own inline schema comment without
+ * checking it against task.pdf's actual, literal requirement -- Spring Security + JWT, stated
+ * explicitly, twice. Revisited and corrected (see V1's migration comment for the fuller history):
+ * the opaque design's main claimed advantage, instant session revocation, was never actually backed
+ * by any detection mechanism in this project, so the real trade-off favored JWT once examined
+ * honestly -- less hand-rolled code for FR-04's auth filter (Spring's oauth2-resource-server
+ * handles most of it), no per-request database dependency, and it matches the literal spec. Signing
+ * is RSA (RS256), not HMAC, specifically ahead of a planned future modulith migration to multiple
+ * independently-deployable builds -- under HMAC, every module that needs to verify a token would
+ * need the same shared secret that's also capable of signing forged tokens; under RSA, only the
+ * public key needs distributing to verifying modules. See {@link
+ * com.acuity.subscribemaster.support.JwtIssuer} for the actual signing logic.
  *
  * <p>Email verification (FR-30) is not yet implemented, and neither is FR-31's
  * login-blocked-until-verified gate -- it genuinely can't be built yet: every customer's {@code
@@ -30,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Credential errors are unified deliberately.</b> "Email not found" and "wrong password" both
  * throw the same {@link InvalidCredentialsException}, with the same message and HTTP status --
  * distinguishing them would let an attacker enumerate registered emails via the login endpoint
- * itself, the same vulnerability {@link UserAlreadyExistsException}'s generic message already
+ * itself, the same vulnerability {@link AccountAlreadyExistsException}'s generic message already
  * guards against on registration.
  *
  * <p><b>Lockout (5 failed attempts, 15-minute window)</b> is live-expiry-checked on {@code
@@ -51,18 +65,16 @@ import org.springframework.transaction.annotation.Transactional;
  * IP-based rate limiting, a genuinely separate mechanism from the per-account lockout above; out of
  * scope here, revisit if abuse is ever observed.
  *
- * <p>Idempotency (NFR-24) is deliberately not enforced on login: unlike registration, where a
- * retried request risked creating a duplicate customer, a retried login's worst case is a second,
- * redundant session row -- a minor annoyance, not a correctness bug worth the added complexity
- * here.
+ * <p>Idempotency (NFR-24) is deliberately not enforced on login: a retried request simply issues a
+ * second, independent JWT -- both remain valid until their own expiry, which is a minor annoyance,
+ * not a correctness bug worth the added complexity here.
  */
 @Service
 public class AuthService {
   private final CustomerRepository customerRepo;
-  private final CustomerSessionRepository sessionRepo;
+  private final JwtIssuer jwtIssuer;
   private final PasswordEncoder pwdEncoder;
   private final AuditLogService auditLogService;
-  private final long sessionDurationHours;
   private final int maxLoginAttempts;
   private final int lockoutDurationMinutes;
 
@@ -73,17 +85,15 @@ public class AuthService {
 
   public AuthService(
       CustomerRepository customerRepository,
-      CustomerSessionRepository customerSessionRepository,
+      JwtIssuer jwtIssuer,
       PasswordEncoder passwordEncoder,
       AuditLogService auditLogService,
-      @Value("${app.session.duration-hours}") long sessionDurationHours,
       @Value("${app.login-lockout.max-attempts}") int maxLoginAttempts,
       @Value("${app.login-lockout.duration-minutes}") int lockoutDurationMinutes) {
     this.customerRepo = customerRepository;
-    this.sessionRepo = customerSessionRepository;
+    this.jwtIssuer = jwtIssuer;
     this.pwdEncoder = passwordEncoder;
     this.auditLogService = auditLogService;
-    this.sessionDurationHours = sessionDurationHours;
     this.maxLoginAttempts = maxLoginAttempts;
     this.lockoutDurationMinutes = lockoutDurationMinutes;
   }
@@ -144,7 +154,7 @@ public class AuthService {
   }
 
   @Transactional
-  public LoginResponse login(String email, String password, String userAgent, String ipAddress) {
+  public LoginResponse login(String email, String password, String ipAddress) {
     var maskedEmail = EmailMasker.mask(email);
 
     logger.info("login attempt for {}", maskedEmail);
@@ -167,29 +177,24 @@ public class AuthService {
         throw invalidCredentials();
       }
       customer.setLockedUntil(Instant.now().plus(lockoutDurationMinutes, ChronoUnit.MINUTES));
-      throw LockAccount(customer.getId(), ipAddress);
+      throw lockAccount(customer.getId(), ipAddress);
     }
 
     // 4. If successful, clear brute-force counters
     customer.setFailedLoginCount(0);
     customer.setLockedUntil(null);
 
-    // 5. Create the token
-    var rawToken = Tokens.generate();
-    var hashedToken = Tokens.hash(rawToken);
+    // 5. Issue a signed JWT -- self-verifying, nothing to persist
+    var issuedToken = jwtIssuer.issue(customer.getId());
 
-    // 6. Record token identifier in the customer session table
-    // TODO(FR-05): revisit once refresh tokens land -- likely shorten this to 1-2h,
-    // with refresh tokens covering longer-lived "stay logged in" sessions instead.
-    var expiresAt = Instant.now().plus(sessionDurationHours, ChronoUnit.HOURS);
-    var session =
-        new CustomerSession(customer.getId(), hashedToken, ipAddress, userAgent, expiresAt);
-    sessionRepo.save(session);
-
-    // 7. Build and return the response with the token in the message body
+    // 6. Build and return the response with the token in the message body
     logger.info("customer {} login successful.", customer.getId());
     return LoginResponse.accepted(
-        customer.getId(), customer.getEmail(), customer.getIsEmailVerified(), rawToken, expiresAt);
+        customer.getId(),
+        customer.getEmail(),
+        customer.getIsEmailVerified(),
+        issuedToken.token(),
+        issuedToken.expiresAt());
   }
 
   /**
@@ -241,7 +246,7 @@ public class AuthService {
     return new InvalidCredentialsException();
   }
 
-  private AccountLockedException LockAccount(UUID customerId, String ipAddress) {
+  private AccountLockedException lockAccount(UUID customerId, String ipAddress) {
     auditLogService.recordEvent(
         "customer", customerId, "ACCOUNT_LOCKED", "customers", customerId, ipAddress);
     return new AccountLockedException();
