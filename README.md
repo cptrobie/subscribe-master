@@ -39,7 +39,7 @@ This project started from a take-home assignment brief and has since grown into 
    ```
 2. **Start local infrastructure:**
    ```
-   compose up -d
+   docker compose up -d
    ```
    This starts Postgres (`localhost:5432`) and Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `compose.yaml` for why dev mode is safe to hardcode locally but nowhere else).
 3. **Run the database migrations:**
@@ -54,12 +54,22 @@ This project started from a take-home assignment brief and has since grown into 
 5. **Seed Vault with the database credentials** the app will read at startup. Either method works — the CLI, if installed:
 
    ```
-      vault login -address=http://localhost:8200 local-dev-root-token
-      vault kv put -address=http://localhost:8200 secret/subscribe-master \
-        spring.datasource.username=subscribe_master \
-        spring.datasource.password=local_dev_only_not_a_real_secret
+   vault login -address=http://localhost:8200 local-dev-root-token
+
+   # Generate a local RSA key pair for JWT signing (RS256) -- only needs
+   # doing once; re-run the vault kv put below whenever Vault's dev-mode
+   # data is lost (e.g. after `docker compose down -v`).
+   openssl genrsa -out jwt-private.pem 2048
+   openssl rsa -in jwt-private.pem -pubout -out jwt-public.pem
+
+   vault kv put -address=http://localhost:8200 secret/subscribe-master \
+     spring.datasource.username=subscribe_master \
+     spring.datasource.password=local_dev_only_not_a_real_secret \
+     jwt.private-key=@jwt-private.pem \
+     jwt.public-key=@jwt-public.pem
    ```
-   Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same two key/value pairs.
+ 
+6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same two key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
 6. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.

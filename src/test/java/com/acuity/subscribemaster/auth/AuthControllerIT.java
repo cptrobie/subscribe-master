@@ -1,6 +1,7 @@
 package com.acuity.subscribemaster.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.acuity.subscribemaster.auditlog.AuditLogRepository;
 import com.acuity.subscribemaster.auth.dto.LoginRequest;
@@ -9,16 +10,26 @@ import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.error.ApiError;
-import com.acuity.subscribemaster.support.Tokens;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.SignedJWT;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -52,6 +63,11 @@ public class AuthControllerIT {
 
   private static final String VAULT_TOKEN = "test-root-token";
 
+  @Value("${jwt.public-key}")
+  private String jwtPublicKeyPem;
+
+  private RSAPublicKey jwtPublicKey;
+
   @Container
   static final PostgreSQLContainer postgres =
       new PostgreSQLContainer("postgres:16-alpine")
@@ -69,7 +85,6 @@ public class AuthControllerIT {
 
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private CustomerRepository customerRepo;
-  @Autowired private CustomerSessionRepository sessionRepo;
   @Autowired private AuditLogRepository auditLogRepo;
   @Autowired private PasswordEncoder passwordEncoder;
 
@@ -99,6 +114,42 @@ public class AuthControllerIT {
     if (putResult.getExitCode() != 0) {
       throw new IllegalStateException("vault kv put failed: " + putResult.getStderr());
     }
+
+    String testPrivateKeyPem = readTestResource("test-jwt-keys/jwt-private.pem");
+    String testPublicKeyPem = readTestResource("test-jwt-keys/jwt-public.pem");
+
+    putResult =
+        vault.execInContainer(
+            "vault",
+            "kv",
+            "put",
+            "-address=http://127.0.0.1:8200",
+            "secret/subscribe-master",
+            "spring.datasource.username=subscribe_master",
+            "spring.datasource.password=test_only_not_a_real_secret",
+            "jwt.private-key=" + testPrivateKeyPem,
+            "jwt.public-key=" + testPublicKeyPem);
+    if (putResult.getExitCode() != 0) {
+      throw new IllegalStateException("vault kv put failed: " + putResult.getStderr());
+    }
+  }
+
+  private static String readTestResource(String classpathLocation) throws IOException {
+    var resource = new ClassPathResource(classpathLocation);
+    try (var inputStream = resource.getInputStream()) {
+      return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
+  @BeforeEach
+  void parseJwtPublicKey() throws Exception {
+    String cleaned =
+        jwtPublicKeyPem
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replaceAll("\\s", "");
+    var keySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(cleaned));
+    jwtPublicKey = (RSAPublicKey) KeyFactory.getInstance("RSA").generatePublic(keySpec);
   }
 
   @AfterAll
@@ -219,7 +270,7 @@ public class AuthControllerIT {
   }
 
   @Test
-  void registerThenLogin_persistsHashedSessionTokenAndReturnsRawToken() {
+  void registerThenLogin_issuesValidSignedJwtForTheCorrectCustomer() throws Exception {
     var email = "login.roundtrip@example.com";
     var rawPassword = "easyPassword!#123";
 
@@ -236,21 +287,24 @@ public class AuthControllerIT {
     var body = response.getBody();
     assertThat(body).isNotNull();
     assertThat(body.token()).isNotBlank();
-    assertThat(body.expiresAt()).isNotNull().isAfter(Instant.now().plus(12, ChronoUnit.MINUTES));
+    assertThat(body.expiresAt()).isNotNull().isAfter(Instant.now());
 
     var savedCustomer = customerRepo.findByEmail(email).orElseThrow();
-    var sessions = sessionRepo.findByCustomerId(savedCustomer.getId());
-    assertThat(sessions).hasSize(1);
 
-    // The stored token is a HASH, never the raw bearer token -- same discipline as
-    // password_hash. Prove they're the SAME underlying token by hashing the raw
-    // one returned and comparing, rather than trusting the response alone.
-    assertThat(sessions.get(0).getSessionToken()).isNotEqualTo(body.token());
-    assertThat(sessions.get(0).getSessionToken()).isEqualTo(Tokens.hash(body.token()));
+    // Prove the token is a genuinely valid, correctly-signed JWT -- not just a
+    // non-blank string -- by parsing it and verifying its signature against the
+    // real public key, then checking its claims match the customer who logged in.
+    SignedJWT signedJwt = SignedJWT.parse(body.token());
+    RSASSAVerifier verifier = new RSASSAVerifier(jwtPublicKey);
+    assertThat(signedJwt.verify(verifier)).isTrue();
+    assertThat(signedJwt.getJWTClaimsSet().getSubject())
+        .isEqualTo(savedCustomer.getId().toString());
+    assertThat(signedJwt.getJWTClaimsSet().getExpirationTime().toInstant())
+        .isCloseTo(body.expiresAt(), within(2, ChronoUnit.SECONDS));
   }
 
   @Test
-  void loginWithWrongPassword_returnsUnauthorizedAndCreatesNoSession() {
+  void loginWithWrongPassword_returnsUnauthorized() {
     var email = "addme@example.com";
     var rawPassword = "easyPassword!#123";
     var wrongPassword = "wrongPassword!#123";
@@ -267,11 +321,6 @@ public class AuthControllerIT {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().code()).isEqualTo("INVALID_CREDENTIALS");
-
-    var savedCustomer = customerRepo.findByEmail(email).orElseThrow();
-    var sessions = sessionRepo.findByCustomerId(savedCustomer.getId());
-
-    assertThat(sessionRepo.findByCustomerId(savedCustomer.getId())).isEmpty();
   }
 
   @Test

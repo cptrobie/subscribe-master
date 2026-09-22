@@ -7,6 +7,18 @@
 -- Schema only — seed data for roles/permissions lives in the
 -- companion migration V1.1__seed_roles_and_permissions.sql, kept
 -- separate so schema and seed data version independently.
+--
+-- Consolidated (pre-deployment, no real data ever existed against
+-- this schema -- see ARCHITECTURE.md section 8): customer_sessions
+-- (opaque, DB-backed session tokens) was built and fully exercised
+-- for FR-02, then retired in favor of JWT once it was discovered
+-- task.pdf explicitly specified Spring Security + JWT -- see
+-- AuthService's class Javadoc for the fuller reasoning.
+-- failed_login_attempts/locked_until (originally V8) and
+-- customer_refresh_tokens' ip_address/user_agent (originally V9)
+-- are folded in here directly, rather than kept as separate
+-- migrations for a table/columns that, in this consolidated
+-- timeline, existed this way from the start.
 -- =====================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- for gen_random_uuid()
@@ -17,13 +29,15 @@ CREATE EXTENSION IF NOT EXISTS "citext";   -- for case-insensitive email columns
 -- Customer auth
 -- ---------------------------------------------------------------------
 CREATE TABLE customers (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           CITEXT NOT NULL UNIQUE,
-    password_hash   TEXT,               -- nullable: social-only accounts may have no password
-    email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email                   CITEXT NOT NULL UNIQUE,
+    password_hash           TEXT,               -- nullable: social-only accounts may have no password
+    email_verified          BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active               BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_login_attempts   INTEGER NOT NULL DEFAULT 0,
+    locked_until            TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_customers_email ON customers (email);
@@ -42,19 +56,6 @@ CREATE TABLE customer_oauth_accounts (
 );
 
 CREATE INDEX idx_customer_oauth_accounts_customer_id ON customer_oauth_accounts (customer_id);
-
-CREATE TABLE customer_sessions (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id     UUID NOT NULL REFERENCES customers (id) ON DELETE CASCADE,
-    session_token   TEXT NOT NULL UNIQUE,   -- store a hash, not the raw token, in application code
-    ip_address      INET,
-    user_agent      TEXT,
-    expires_at      TIMESTAMPTZ NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_customer_sessions_customer_id ON customer_sessions (customer_id);
-CREATE INDEX idx_customer_sessions_expires_at ON customer_sessions (expires_at);
 
 CREATE TABLE customer_password_reset_tokens (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,6 +85,9 @@ CREATE TABLE customer_refresh_tokens (
     token_hash      TEXT NOT NULL UNIQUE,   -- store a hash of the token, never the raw value
     expires_at      TIMESTAMPTZ NOT NULL,
     revoked_at      TIMESTAMPTZ,            -- null while valid; set on logout, rotation, or manual revocation
+    ip_address      INET,                   -- where the refresh token was last used from -- a real
+                                             -- security signal for a long-lived, higher-value token
+    user_agent      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

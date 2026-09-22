@@ -56,6 +56,10 @@ flyway.local.conf
 # live token and must never be committed.
 .vault-token
 
+# Locally-generated JWT signing key pair (see README.md "Vault bootstrap") --
+# provisioned directly into Vault, never meant to be source-controlled.
+*.pem
+
 # --- Spring Boot ---
 *.pid
 

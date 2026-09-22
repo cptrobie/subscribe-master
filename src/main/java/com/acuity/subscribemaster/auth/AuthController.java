@@ -101,11 +101,7 @@ public class AuthController {
   public ResponseEntity<LoginResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
     var response =
-        authService.login(
-            request.email(),
-            request.password(),
-            httpRequest.getHeader("User-Agent"),
-            httpRequest.getRemoteAddr());
+        authService.login(request.email(), request.password(), httpRequest.getRemoteAddr());
     return ResponseEntity.status(HttpStatus.OK).body(response);
   }
 }
