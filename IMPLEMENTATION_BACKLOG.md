@@ -224,7 +224,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-01] User registration endpoint (/auth/register)` — **[S]**
 - `[FR-30] Email verification on registration (send verification link, confirm via endpoint)` — **[L]**
 - `[FR-31] Login blocked until email verified` — **[S]**
-- `[FR-02] User login endpoint (/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
+- `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
 - `[FR-03] Password hashing (BCrypt)` — **[S]**
 - `[FR-04] Per-user data isolation / authorization enforcement` — **[M]**
 - `[NFR-02] Global exception handling` — **[S]** — introduce as soon as the first real endpoints exist, not later
