@@ -33,7 +33,7 @@ public class JwtIssuer {
   public JwtIssuer(
       @Value("${jwt.private-key}") String privateKeyPem,
       @Value("${app.jwt.access-token-duration-minutes}") long accessTokenDurationMinutes) {
-    this.signingKey = parsePrivateKey(privateKeyPem);
+    this.signingKey = PemKeys.parsePrivateKey(privateKeyPem);
     this.accessTokenDurationMinutes = accessTokenDurationMinutes;
   }
 
