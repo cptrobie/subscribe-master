@@ -10,16 +10,14 @@ import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.error.ApiError;
+import com.acuity.subscribemaster.support.PemKeys;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.SignedJWT;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -143,13 +141,7 @@ public class AuthControllerIT {
 
   @BeforeEach
   void parseJwtPublicKey() throws Exception {
-    String cleaned =
-        jwtPublicKeyPem
-            .replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "")
-            .replaceAll("\\s", "");
-    var keySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(cleaned));
-    jwtPublicKey = (RSAPublicKey) KeyFactory.getInstance("RSA").generatePublic(keySpec);
+    jwtPublicKey = PemKeys.parsePublicKey(jwtPublicKeyPem);
   }
 
   @AfterAll

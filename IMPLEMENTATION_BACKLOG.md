@@ -231,7 +231,9 @@ Example of a paused wave with an optional resumption note:
 
 ## Wave 2 — Authorization extensions
 
-**Rationale:** depends on Wave 1 existing. Needed before Wave 5 (statistics), since admin-only statistics require role checks to exist first.
+**Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first.
+
+**Temporarily bypassed after Wave 1, resumed before Wave 4.5/Wave 9.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record.
 
 - `[FR-06] Role-based access control (staff roles/permissions)` — **[M]**
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
