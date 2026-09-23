@@ -231,7 +231,7 @@ Example of a paused wave with an optional resumption note:
 
 ## Wave 2 — Authorization extensions
 
-**Rationale:** depends on Wave 1 existing. Needed before Wave 5 (statistics), since admin-only statistics require role checks to exist first.
+**Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first.
 
 - `[FR-06] Role-based access control (staff roles/permissions)` — **[M]**
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
