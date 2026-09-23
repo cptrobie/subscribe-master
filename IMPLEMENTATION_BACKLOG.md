@@ -221,22 +221,26 @@ Example of a paused wave with an optional resumption note:
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
+**FR-30/FR-31 remain open, deliberately, while work proceeds to Wave 3.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — is genuinely done. FR-30 (email verification) and FR-31 (its login gate, which can't be built until FR-30 exists) are real, substantial remaining work (FR-30 alone is L-sized/24h) that would mean a full return to sustained auth work right after stepping away from it. Wave 3 has no functional dependency on either — nothing about subscription management needs email verification to exist first. Revisit FR-30/31 deliberately, not by default; this note stays until they're closed.
+
 - `[FR-01] User registration endpoint (/auth/register)` — **[S]**
-- `[FR-30] Email verification on registration (send verification link, confirm via endpoint)` — **[L]**
-- `[FR-31] Login blocked until email verified` — **[S]**
 - `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
 - `[FR-03] Password hashing (BCrypt)` — **[S]**
 - `[FR-04] Per-user data isolation / authorization enforcement` — **[M]**
+- `[FR-30] Email verification on registration (send verification link, confirm via endpoint)` — **[L]**
+- `[FR-31] Login blocked until email verified` — **[S]**
 - `[NFR-02] Global exception handling` — **[S]** — introduce as soon as the first real endpoints exist, not later
 
 ## Wave 2 — Authorization extensions
 
 **Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first.
 
-**Temporarily bypassed after Wave 1, resumed before Wave 4.5/Wave 9.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record.
+**Temporarily bypassed after Wave 1, resumed before Wave 4.5/Wave 9.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record. **Also worth noting when Wave 2 resumes:** `FR-33` (added here after this note was first written) is itself blocked on `FR-30`'s `EmailSender` — so Wave 2 can't fully complete until Wave 1's deferred `FR-30` also lands, independent of the Wave 4.5/Wave 9 dependencies above.
 
-- `[FR-06] Role-based access control (staff roles/permissions)` — **[M]**
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
+- `[FR-06] Role-based access control (staff roles/permissions)` — **[M]**
+- `[FR-33] Two-factor authentication (email OTP)` — **[L]** — blocked on `FR-30` (needs `EmailSender`); see `login_2fa_sequence.md` for the full design
+- `[FR-34] 2FA toggle (per-customer enable/disable)` — **[S]** — depends on `FR-33`
 
 ## Wave 3 — Subscription management core
 
