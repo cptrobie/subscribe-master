@@ -1,6 +1,6 @@
 # Login / 2FA sequence
 
-Captures the design worked through for `FR-33`/`FR-34` (not yet formally drafted as requirements — this diagram is the reference for when that happens). Covers: password check, the 2FA challenge, the retry-with-new-code behavior on a wrong guess, and the lockout after the 3rd failed attempt.
+Captures the design worked through for `FR-33`/`FR-34` (see `subscribe_master_requirements.md` for the formal requirements and `IMPLEMENTATION_BACKLOG.md` for wave placement — this diagram remains the detailed design reference). Covers: password check, the 2FA challenge, the retry-with-new-code behavior on a wrong guess, and the lockout after the 3rd failed attempt.
 
 ```mermaid
 sequenceDiagram
@@ -11,15 +11,15 @@ sequenceDiagram
     C->>A: POST /login (email, password)
 
     alt 2FA disabled
-        A-->>C: session issued
+        A-->>C: JWT issued
     else 2FA enabled
         A->>E: send 2FA code
         E-->>C: email with code
-        A-->>C: challenge reference (no session yet)
+        A-->>C: challenge reference (no JWT yet)
 
         C->>A: POST /verify-2fa (code)
         alt code correct
-            A-->>C: session issued
+            A-->>C: JWT issued
         else code incorrect, attempt 1 or 2 of 3
             Note over A: old code invalidated,<br/>attempt count +1
             A->>E: send new code
@@ -43,3 +43,13 @@ sequenceDiagram
 - **Lockout duration: 15 minutes.** Chosen as a middle ground — long enough to meaningfully slow a scripted attack, short enough that a customer who fat-fingered their code isn't locked out for an unreasonable stretch.
 - **The failure message is identical whether the password was actually correct or not, whenever the account is locked.** This is deliberate: telling a locked-out attacker "your password was right, but..." would leak that their password guess was valid, even while blocking further attempts.
 - **The lockout check happens before password validation** on any subsequent `/login` attempt during the lockout window — so a locked-out account behaves identically regardless of what password is submitted.
+
+## Schema — not yet built
+
+Neither of these exist yet; both land when `FR-33`/`FR-34` are actually implemented,
+likely folded directly into `V1` given this project's still-pre-deployment consolidation
+precedent (see `V1`'s own migration comment for why).
+
+- **`customers.two_factor_enabled BOOLEAN NOT NULL DEFAULT TRUE`** — `FR-34`'s toggle target.
+- **`customer_two_factor_codes`** — the OTP challenge record itself: code hash, expiry,
+  attempt count. Exact columns to be finalized when `FR-33` is actually built.
