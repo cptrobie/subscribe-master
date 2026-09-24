@@ -8,11 +8,10 @@ This project started from a take-home assignment brief and has since grown into 
 
 ## Status
 
-**Wave 0 — Project bootstrap is complete.** The Maven/Spring Boot project scaffold exists (`pom.xml`, `src/`, a main `@SpringBootApplication` class) with all core dependencies wired and verified working: JPA, PostgreSQL, Flyway, Vault, and Testcontainers.
-
-**Proven working, not just configured:** a GitHub Actions CI pipeline (`.github/workflows/ci.yaml`) runs on every push/PR and passes — `SubscribeMasterApplicationIT` boots the full Spring context against ephemeral Testcontainers-managed Postgres and Vault, Flyway migrates the complete schema from scratch, Hibernate validates it, and the datasource credentials resolve correctly from Vault. This all happens automatically, with no manually-started infrastructure required in CI.
-
-**Still not built:** any actual business logic. No entities, repositories, controllers, or real subscription/payment/auth functionality exists yet — Wave 0 was entirely infrastructure and wiring. Wave 1 (Authentication core) is next; see `IMPLEMENTATION_BACKLOG.md`.
+- **Wave-by-wave progress:** see `IMPLEMENTATION_BACKLOG.md` — wave markers (🚧/✅) and
+  individual issue checkboxes reflect real, current state.
+- **Time logged, per issue and per wave:** run `./scripts/time_tracking/project_time_report.sh`
+  for a live report generated from actual GitHub issue comments, not a hand-maintained summary.
 
 ---
 

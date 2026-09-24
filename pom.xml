@@ -95,13 +95,9 @@
             <artifactId>spring-boot-resttestclient</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- ==================== Testing: Testcontainers (NFR-11) ====================
-             Versions managed by spring-boot-starter-parent — do not pin explicitly,
-             same reasoning as spring-cloud-starter-vault-config above. Used for
-             integration tests that provision their own throwaway Postgres/Vault per
-             run, rather than depending on compose.yaml already being started
-             manually. See src/test/.../ApplicationIntegrationIT.java for the
-             reference pattern this project follows. -->
+        <!-- NFR-11: coverage enforcement is active (30% minimum). A threshold this
+              low only meaningfully applies once real business logic and tests exist;
+              see git blame if you need the history of when/why this was enabled. -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>

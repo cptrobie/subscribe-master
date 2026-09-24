@@ -25,7 +25,7 @@ Subscribe Master consolidates a customer's paid subscriptions (Netflix, Spotify,
 
 **For developers:** don't be tempted to unify these later "for simplicity." If you need a person to be both a customer and staff member, that's an unsolved case in the current design — there's no link between the two tables. Raise it explicitly rather than improvising a workaround (e.g. don't reuse a customer's UUID as a staff UUID).
 
-**For ops/support:** account lookups differ by population. A "can't log in" ticket needs you to know *which* table to check — a customer complaint means `customers`/`customer_sessions`, a staff complaint means `staff_users`/`staff_sessions`. They will never be in the same table.
+**For ops/support:** account lookups differ by population. A "can't log in" ticket needs you to know *which* table to check — a customer complaint means `customers` (login itself issues a stateless JWT, nothing to look up for that specifically; `customer_refresh_tokens` is the only stateful piece worth checking, and only if the issue is refresh-related), a staff complaint means `staff_users`/`staff_sessions`. They will never be in the same table.
 
 ### 2.2 Staff authorization is RBAC (roles → permissions), not a hardcoded role check
 
@@ -35,9 +35,11 @@ Subscribe Master consolidates a customer's paid subscriptions (Netflix, Spotify,
 
 **For ops/audit:** if a staff member reports they can't do something they think they should be able to, the fix is a `role_permissions` row change, not a code deploy. Audit review of *who has what access* is a query against `role_permissions` joined to `staff_users`, and should be a routine periodic check, not just an incident-response tool.
 
-### 2.3 Token lifecycle: four distinct token tables, all hash-stored
+### 2.3 Token lifecycle: three distinct token tables, all hash-stored
 
-`customer_sessions`, `customer_password_reset_tokens`, `customer_email_verification_tokens`, and `customer_refresh_tokens` (plus staff equivalents for sessions and password reset) all follow the same pattern: store a **hash** of the token, never the raw value, the same way passwords are hashed. `password_reset_tokens`/`email_verification_tokens` are single-use (`used_at` marks consumption); `refresh_tokens` are reusable until `revoked_at` or `expires_at` — that distinction is deliberate, not an oversight, so don't "fix" refresh tokens to look like the single-use tables.
+`customer_password_reset_tokens`, `customer_email_verification_tokens`, and `customer_refresh_tokens` (plus staff equivalents for sessions and password reset) all follow the same pattern:
+
+ store a **hash** of the token, never the raw value, the same way passwords are hashed. `password_reset_tokens`/`email_verification_tokens` are single-use (`used_at` marks consumption); `refresh_tokens` are reusable until `revoked_at` or `expires_at` — that distinction is deliberate, not an oversight, so don't "fix" refresh tokens to look like the single-use tables.
 
 **For developers:** never log a raw token, even at debug level. If you need to look up a token record, you're hashing the incoming token with the same algorithm the app uses to generate them and querying by the hash — not searching for a raw value anywhere.
 
@@ -294,6 +296,3 @@ Waiting past Wave 4.5 — e.g. until Wave 11's quality gate — was rejected for
 ### 13.4 Database scope: schema partitioning, not schema separation
 
 `audit_logs.actor_id`/`resource_id` already have no real foreign key — deliberately, since they're polymorphic across `customer`/`staff` (§6.1) — and that's the existing precedent `NFR-29` generalizes: where a genuine module boundary is being crossed, the foreign key is replaced with an application-enforced reference instead of a database-enforced one. This does not mean every foreign key disappears — a subscription still has a real, DB-enforced foreign key to the customer that owns it if both stay within a boundary that's allowed to know about the other directly (to be decided as part of `NFR-26`'s design work, not assumed here). The point is a deliberate, reviewed decision per relationship, not a blanket rule.
-### 13.5 CustomerSession: a pre-existing intent, not a new decision
-
-The package structure has followed domain-oriented organization since Day 1 of the project, wherever practical — `auth`, `customer`, `auditlog`, and the rest already reflect that intent; it isn't something `NFR-26` introduces. `CustomerSession`/`CustomerSessionRepository` were simply missed against that existing intent, landing in `customer` (alongside `Customer` itself) rather than `auth`, where the rest of session/login logic actually lives. Moving them on [date] corrects that gap — it isn't a new architectural decision requiring `NFR-26`'s design work, which is why it didn't need to wait for Wave 4.5 to begin. Recorded here for the same reason §13.3's violation is: so the diagram and the real structure don't quietly drift apart. Distinct from §13.3's `AuthService`/`CustomerRepository` violation, which *does* need `NFR-26`'s actual design work — that one has no obvious pre-existing answer to simply catch up to.

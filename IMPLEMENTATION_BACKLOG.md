@@ -223,7 +223,7 @@ Example of a paused wave with an optional resumption note:
 
 **FR-30/FR-31 remain open, deliberately, while work proceeds to Wave 3.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — is genuinely done. FR-30 (email verification) and FR-31 (its login gate, which can't be built until FR-30 exists) are real, substantial remaining work (FR-30 alone is L-sized/24h) that would mean a full return to sustained auth work right after stepping away from it. Wave 3 has no functional dependency on either — nothing about subscription management needs email verification to exist first. Revisit FR-30/31 deliberately, not by default; this note stays until they're closed.
 
-- `[FR-01] User registration endpoint (/auth/register)` — **[S]**
+- `[FR-01] User registration endpoint (/api/v1/auth/register)` — **[S]**
 - `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
 - `[FR-03] Password hashing (BCrypt)` — **[S]**
 - `[FR-04] Per-user data isolation / authorization enforcement` — **[M]**
@@ -259,7 +259,7 @@ Example of a paused wave with an optional resumption note:
 
 ## Wave 4.5 — Module boundary hardening (modulith)
 
-*(Setup: the `wave-4.5` label already exists — created 2026-09-20 via `scripts/one_time/wave_4.5_nfr_add.sh`'s label-creation step, run ad hoc before the script itself was written down; the script is the accurate record of that action. The six NFR issues below have not yet been created.)*
+*(Setup: the `wave-4.5` label already exists — created 2026-09-20 via `scripts/one_time/wave_4.5_nfr_add.sh`'s label-creation step, run ad hoc before the script itself was written down; the script is the accurate record of that action. All six NFR issues below (#80–85) now exist.)*
 
 **Rationale:** deliberately not done sooner. Three domains exist by the end of Wave 2 (`auth`, `customer`, the RBAC/staff pieces of authorization) — enough to name one real violation (`AuthService` reaching directly into `CustomerRepository`/`Customer`), but not enough to learn the lesson a module-boundary exercise is actually for. By the end of Wave 4, Subscription Management (core + extensions) exists alongside them — a fourth domain with its own real interactions (subscriptions reference customers; authorization gates actions across both) — genuinely representative of the kind of cross-domain friction this exercise is meant to teach, not a toy example manufactured to justify doing it. This trade-off is accepted deliberately: this project's goal is depth of practice, not minimizing calendar time (see `README.md`). Three justifications, in order of weight:
 
@@ -312,7 +312,7 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[FR-19] Payment-due warning notification (log/email)` — **[M]**
 - `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[S]**
 - `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]**
-- `[FR-32] Unverified account cleanup (24h expiry) + expired session cleanup (customer_sessions.expires_at)` — **[M]**
+- `[FR-32] Unverified account cleanup (24h expiry) + expired refresh-token cleanup (customer_refresh_tokens.expires_at)` — **[M]** — retargeted from customer_sessions during the JWT pivot; customer_refresh_tokens is now the stateful, DB-backed table with the same unbounded-growth problem
 
 ## Wave 9 — Reporting & statistics
 
