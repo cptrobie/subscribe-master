@@ -189,12 +189,16 @@ WHERE rp.role_id = (SELECT id FROM roles WHERE name = $1)
 ORDER BY p.resource, p.action;
 ```
 
-**Active (non-expired) sessions for a customer:**
+**Active (non-revoked, non-expired) refresh tokens for a customer** (there's no
+equivalent query for the JWT access token itself — it's stateless by design, nothing
+in the database represents "this token is currently valid"; `customer_refresh_tokens`
+is the genuinely analogous, DB-backed, revocable credential post-JWT-pivot):
 
 ```sql
 SELECT id, ip_address, user_agent, created_at, expires_at
-FROM customer_sessions
+FROM customer_refresh_tokens
 WHERE customer_id = $1
+  AND revoked_at IS NULL
   AND expires_at > now();
 ```
 
