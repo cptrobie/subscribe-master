@@ -59,21 +59,22 @@ This project started from a take-home assignment brief and has since grown into 
    # Generate a local RSA key pair for JWT signing (RS256) -- only needs
    # doing once; re-run the vault kv put below whenever Vault's dev-mode
    # data is lost (e.g. after `docker compose down -v`).
-   openssl genrsa -out jwt-private.pem 2048
-   openssl rsa -in jwt-private.pem -pubout -out jwt-public.pem
+      mkdir -p src/main/resources/local-dev-keys
+   openssl genrsa -out src/main/resources/local-dev-keys/jwt-private.pem 2048
+   openssl rsa -in src/main/resources/local-dev-keys/jwt-private.pem -pubout -out src/main/resources/local-dev-keys/jwt-public.pem
 
    vault kv put -address=http://localhost:8200 secret/subscribe-master \
      spring.datasource.username=subscribe_master \
      spring.datasource.password=local_dev_only_not_a_real_secret \
-     jwt.private-key=@jwt-private.pem \
-     jwt.public-key=@jwt-public.pem
+     jwt.private-key=@src/main/resources/local-dev-keys/jwt-private.pem \
+     jwt.public-key=@src/main/resources/local-dev-keys/jwt-public.pem
    ```
  
 6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same two key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
-6. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
-
+7. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
+ 
 ---
 
 ## Project structure
@@ -81,9 +82,13 @@ This project started from a take-home assignment brief and has since grown into 
 ```
 .
 ├── src/main/resources/db/migration/     # Flyway schema + seed migrations (source of truth for the DB)
+├── src/main/resources/local-dev-keys/   # Locally-generated JWT signing key pair -- gitignored, see "Vault bootstrap" below
+├── src/test/resources/test-jwt-keys/    # Dedicated test-only JWT key pair -- committed (disposable fixture, never a real credential)
 ├── scripts/                             # One-time and recurring project-management scripts (see each subfolder)
+├── design-docs/                         # Design docs ahead of formal requirements (sequence/flow diagrams, key decisions)
+│   ├── login_2fa_sequence.md
+│   └── subscription_status_transitions.md
 ├── subscribe_master_erd.drawio          # Entity-relationship diagram (open in draw.io / app.diagrams.net)
-├── login_2fa_sequence.md                # Login/2FA design sequence diagram (mermaid) — will move to a dedicated folder once there are a few more of these
 ├── compose.yaml                         # Local Postgres + Vault (dev mode)
 ├── ARCHITECTURE.md                      # Design decisions, dev/ops guidance
 ├── subscribe_master_requirements.md     # Functional/non-functional requirements, with schema coverage status
@@ -102,7 +107,8 @@ This project started from a take-home assignment brief and has since grown into 
 | `IMPLEMENTATION_BACKLOG.md` | The GitHub issue backlog: one issue per requirement, sequenced into waves, sized S/M/L |
 | `COMMON_QUERIES.md` | Practical SQL for the questions that come up repeatedly against this schema |
 | `subscribe_master_erd.drawio` | The entity-relationship diagram, with a legend explaining the color-coded domain sections |
-| `login_2fa_sequence.md` | Sequence diagram and key decisions for the login/2FA design, ahead of formal `FR-33`/`FR-34` requirements |
+| `design-docs/login_2fa_sequence.md` | Sequence diagram and key decisions for the login/2FA design |
+| `design-docs/subscription_status_transitions.md` | Flowchart and key decisions for subscription status transitions and payment-date impact |
 
 
 ---
