@@ -248,7 +248,7 @@ Example of a paused wave with an optional resumption note:
 
 - `[FR-07] Subscription CRUD (name, price, currency, start date, frequency)` — **[M]**
 - `[FR-08] Automatic next-payment-date calculation` — **[S]**
-- `[FR-09] Subscription status enum (ACTIVE/PAUSED/CANCELLED)` — **[S]**
+- `[FR-09] Subscription status enum (ACTIVE/PAUSED/CANCELLED)` — **[M]** — includes transition validity and payment-date recalculation logic (task.pdf leaves this undesigned; see `subscription_status_transitions.md`)
 - `[NFR-04] Optimistic locking on customer_subscriptions and payment_history` — **[M]**
 
 ## Wave 4 — Subscription management extensions
