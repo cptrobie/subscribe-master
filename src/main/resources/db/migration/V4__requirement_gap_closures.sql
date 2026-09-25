@@ -1,6 +1,6 @@
 -- =====================================================================
 -- V4 — Requirement gap closures
--- Closes four gaps found when cross-checking the schema against the
+-- Closes five gaps found when cross-checking the schema against the
 -- Subscribe Master requirements doc:
 --   1. Optimistic locking (NFR-04) — version column on the two tables
 --      most exposed to concurrent writes.
@@ -8,6 +8,9 @@
 --   3. Notification tracking, to avoid duplicate payment-due reminders
 --      (FR-19/FR-20).
 --   4. Scheduler concurrency safety via ShedLock (FR-21).
+--   5. Cancellation reason tracking — distinguishes voluntary
+--      cancellation from payment-failure-triggered cancellation,
+--      without expanding customer_subscriptions.status itself.
 -- =====================================================================
 
 -- --- 1. Optimistic locking -----------------------------------------------
@@ -73,3 +76,12 @@ CREATE TABLE shedlock (
     locked_at   TIMESTAMP NOT NULL,
     locked_by   VARCHAR(255) NOT NULL
 );
+
+
+-- --- 5. Cancellation reason tracking ---------------------------------
+
+ALTER TABLE customer_subscriptions
+    ADD COLUMN cancellation_reason TEXT
+        CHECK (cancellation_reason IS NULL OR cancellation_reason IN (
+            'customer_requested', 'payment_failure', 'staff_action'
+        ));

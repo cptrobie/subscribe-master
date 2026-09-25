@@ -11,10 +11,23 @@
 -- Note: customer_subscriptions.status uses ACTIVE/CANCELLED/PAUSED
 -- (uppercase) from the outset, matching the Subscribe Master spec's
 -- enum convention directly — no later casing fix required.
+--
+-- Note: currency columns representing a real, human-made choice
+-- (base_currency, customer_subscriptions.currency, payment_history's
+-- two currency columns) are CHECK-constrained to a curated 7-currency
+-- list -- task.pdf's own three (USD, UZS, EUR) plus a deliberate
+-- extension to the four remaining top-5-by-global-trading-volume
+-- currencies (GBP, CNY, JPY, per the BIS April 2025 Triennial
+-- Survey) and CAD, all confirmed supported by cbu.uz's live API.
+-- exchange_rates is deliberately left unconstrained -- it's a cache
+-- of whatever cbu.uz provides (70+ currencies), not a user choice,
+-- so constraining it to this narrower list would be the wrong layer
+-- and would reject perfectly valid source data.
 -- =====================================================================
 
 ALTER TABLE customers
-    ADD COLUMN base_currency       CHAR(3) NOT NULL DEFAULT 'USD',  -- customer-selected reporting currency
+    ADD COLUMN base_currency       CHAR(3) NOT NULL DEFAULT 'USD'   -- customer-selected reporting currency
+                                    CHECK (base_currency IN ('USD', 'UZS', 'EUR', 'GBP', 'CAD', 'CNY', 'JPY')),
     ADD COLUMN stripe_customer_id  TEXT UNIQUE;                     -- Stripe Customer object reference
 
 
@@ -56,7 +69,8 @@ CREATE TABLE customer_subscriptions (
     custom_name             TEXT,                        -- used when provider_id is null
     account_identifier      TEXT,                        -- e.g. email/username used with the provider (not credentials)
     payment_method_id       UUID REFERENCES customer_payment_methods (id) ON DELETE SET NULL,
-    currency                CHAR(3) NOT NULL,             -- billing currency of the subscription
+    currency                CHAR(3) NOT NULL              -- billing currency of the subscription
+                             CHECK (currency IN ('USD', 'UZS', 'EUR', 'GBP', 'CAD', 'CNY', 'JPY')),
     amount                  NUMERIC(12, 2) NOT NULL,      -- tax-inclusive total, as entered by the customer
     billing_frequency       TEXT NOT NULL CHECK (
                                 billing_frequency IN ('weekly', 'monthly', 'quarterly', 'semi_annual', 'annual', 'custom')
@@ -97,9 +111,11 @@ CREATE TABLE payment_history (
     subscription_id         UUID NOT NULL REFERENCES customer_subscriptions (id) ON DELETE RESTRICT,
     payment_method_id       UUID REFERENCES customer_payment_methods (id) ON DELETE SET NULL,
     amount                  NUMERIC(12, 2) NOT NULL,      -- tax-inclusive, in subscription currency
-    currency                CHAR(3) NOT NULL,
+    currency                CHAR(3) NOT NULL
+                             CHECK (currency IN ('USD', 'UZS', 'EUR', 'GBP', 'CAD', 'CNY', 'JPY')),
     base_currency_amount    NUMERIC(12, 2),                -- converted amount, snapshotted at payment time
-    base_currency           CHAR(3),
+    base_currency           CHAR(3)
+                             CHECK (base_currency IS NULL OR base_currency IN ('USD', 'UZS', 'EUR', 'GBP', 'CAD', 'CNY', 'JPY')),
     exchange_rate_applied   NUMERIC(18, 8),                -- snapshot of the rate used; immutable after the fact
     status                  TEXT NOT NULL DEFAULT 'pending'
                              CONSTRAINT chk_payment_history_status
