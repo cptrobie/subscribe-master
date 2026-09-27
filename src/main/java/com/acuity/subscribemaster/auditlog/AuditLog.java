@@ -27,7 +27,7 @@ public class AuditLog {
   private UUID id;
 
   @Column(name = "actor_type", nullable = false, updatable = false)
-  private String actorType;
+  private ActorType actorType;
 
   @Column(name = "actor_id", nullable = false, updatable = false)
   private UUID actorId;
@@ -52,7 +52,7 @@ public class AuditLog {
   protected AuditLog() {}
 
   public AuditLog(
-      String actorType,
+      ActorType actorType,
       UUID actorId,
       String action,
       String resource,
@@ -70,7 +70,7 @@ public class AuditLog {
     return id;
   }
 
-  public String getActorType() {
+  public ActorType getActorType() {
     return actorType;
   }
 

@@ -58,6 +58,19 @@ app:
     max-attempts: 5
     duration-minutes: 15
 
+  payment:
+    retry:
+      # IMPORTANT: max-attempts is capped by the database schema, not just this
+      # config value. payment_attempts.attempt_number and
+      # payment_history.attempt_count both have CHECK constraints hardcoded to
+      # BETWEEN 1 AND 3 (see V3__payment_retry_and_refunds.sql). Raising
+      # max-attempts here WITHOUT a matching migration to widen those
+      # constraints will cause a runtime DB error the first time an attempt
+      # past 3 is recorded, not a startup failure — the app won't fail fast.
+      max-attempts: 3
+      base-backoff: PT2H      # ISO-8601 duration: 2 hours
+      backoff-multiplier: 2.0
+
 # spring.profiles.active is intentionally not set here — provide it externally
 # per environment (SPRING_PROFILES_ACTIVE env var, or compose.yaml's
 # app service once that exists), not hardcoded in a committed file.

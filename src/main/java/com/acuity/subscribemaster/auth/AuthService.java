@@ -1,5 +1,6 @@
 package com.acuity.subscribemaster.auth;
 
+import com.acuity.subscribemaster.auditlog.ActorType;
 import com.acuity.subscribemaster.auditlog.AuditLogService;
 import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
@@ -47,15 +48,16 @@ import org.springframework.transaction.annotation.Transactional;
  * itself, the same vulnerability {@link AccountAlreadyExistsException}'s generic message already
  * guards against on registration.
  *
- * <p><b>Lockout (5 failed attempts, 15-minute window)</b> is live-expiry-checked on {@code
+ * <p><b>Lockout</b> ({@code app.login-lockout.max-attempts} failed attempts within
+ * {@code app.login-lockout.duration-minutes}) is live-expiry-checked on {@code
  * customers.locked_until}, not a scheduled job -- same reasoning as FR-33's 2FA lockout design.
  * Unlike the credential-unification above, a locked account returns a distinct {@link
  * AccountLockedException}, not the generic {@link InvalidCredentialsException} -- deliberately,
  * after weighing the trade-off: a genuine user locked out by a handful of mistyped attempts has no
  * way to know why their presumably-correct password stopped working, or when to retry, under a
  * fully generic response. The information this reveals to an attacker (that the account exists)
- * costs them 5 full attempts to obtain, versus a single request via registration enumeration -- a
- * meaningfully higher attack cost, and lockout itself already blocks sustained automated probing
+ * costs them {@code app.login-lockout.max-attempts} full attempts to obtain, versus a single
+ * request via registration enumeration -- a meaningfully higher attack cost, and lockout itself already blocks sustained automated probing
  * regardless of what the response reveals. Only the lockout trigger itself (the 5th failure) is
  * audited, attributed to the real customer being locked -- not every failed attempt, which would
  * make audit_logs unusably noisy for what's often just a routine mistyped password.
@@ -129,8 +131,7 @@ public class AuthService {
     // (idempotency), which would also help here.
     var customer = customerRepo.saveAndFlush(new Customer(email, pwdEncoder.encode(password)));
 
-    auditLogService.recordEvent(
-        "customer", customer.getId(), "REGISTERED", "customers", customer.getId(), ipAddress);
+    auditLogService.recordEvent(ActorType.CUSTOMER, customer.getId(), "REGISTERED", "customers", customer.getId(), ipAddress);
     // TODO(FR-30): create a token and save to customer_email_verification_tokens, then send the
     // verification email. Out of scope for FR-01.
     /*
@@ -206,7 +207,7 @@ public class AuthService {
     var existingCustomer =
         customerRepo.findByEmail(email).orElseThrow(AccountAlreadyExistsException::new);
     auditLogService.recordEvent(
-        "customer",
+        ActorType.CUSTOMER,
         existingCustomer.getId(),
         "REGISTRATION_REJECTED",
         "customers",
@@ -248,7 +249,7 @@ public class AuthService {
 
   private AccountLockedException lockAccount(UUID customerId, String ipAddress) {
     auditLogService.recordEvent(
-        "customer", customerId, "ACCOUNT_LOCKED", "customers", customerId, ipAddress);
+        ActorType.CUSTOMER, customerId, "ACCOUNT_LOCKED", "customers", customerId, ipAddress);
     return new AccountLockedException();
   }
 }

@@ -1,4 +1,4 @@
 package com.acuity.subscribemaster.payment;
 
-public class PaymentRepository {
+public interface PaymentAttemptRepository {
 }

@@ -43,7 +43,7 @@ public class AuditLogRepositoryIT {
     @Test
     void ipAddressRoundTripsThroughRealPostgresInetColumn() {
         AuditLog saved = repository.save(new AuditLog(
-                "customer",
+                ActorType.CUSTOMER,
                 UUID.randomUUID(),
                 "REGISTERED",
                 "customers",

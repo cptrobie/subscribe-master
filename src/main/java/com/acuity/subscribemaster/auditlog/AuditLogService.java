@@ -19,7 +19,7 @@ public class AuditLogService {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void recordEvent(
-      String actorType,
+      ActorType actorType,
       UUID actorId,
       String action,
       String resource,
