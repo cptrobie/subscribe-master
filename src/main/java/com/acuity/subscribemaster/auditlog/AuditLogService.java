@@ -21,7 +21,7 @@ public class AuditLogService {
   public void recordEvent(
       ActorType actorType,
       UUID actorId,
-      String action,
+      AuditAction action,
       String resource,
       UUID resourceId,
       String ipAddress) {

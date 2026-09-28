@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Derived-query repository only — no native SQL (NFR-16). */
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
-  List<AuditLog> findByActorIdAndAction(UUID actorId, String action);
+  List<AuditLog> findByActorIdAndAction(UUID actorId, AuditAction action);
 }

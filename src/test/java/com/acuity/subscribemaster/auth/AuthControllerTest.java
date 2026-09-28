@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
+import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.error.GlobalExceptionHandler;
 import java.time.Instant;
 import java.util.UUID;
@@ -65,7 +66,7 @@ public class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"not-an-email\",\"password\":\"short\"}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_FAILED.name()))
         .andExpect(
             jsonPath("$.fieldErrors[*].field").value(Matchers.hasItems("email", "password")));
   }
@@ -80,7 +81,7 @@ public class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"addme@example.com\",\"password\":\"easyPassword!#123\"}"))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("ACCOUNT_ALREADY_EXISTS"))
+        .andExpect(jsonPath("$.code").value(ErrorCode.ACCOUNT_ALREADY_EXISTS.name()))
         .andExpect(jsonPath("$.message").value("Email already registered"));
   }
 
@@ -91,7 +92,7 @@ public class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{not valid json"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+        .andExpect(jsonPath("$.code").value(ErrorCode.MALFORMED_REQUEST.name()));
   }
 
   @Test
@@ -104,7 +105,7 @@ public class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"addme@example.com\",\"password\":\"easyPassword!#123\"}"))
         .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+        .andExpect(jsonPath("$.code").value(ErrorCode.INTERNAL_ERROR.name()))
         .andExpect(
             jsonPath("$.message")
                 .value("An unexpected error occurred. If it persists, contact support."));
