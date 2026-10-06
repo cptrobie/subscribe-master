@@ -135,9 +135,9 @@ A failed charge gets up to 3 tries, each recorded as its own row in `payment_att
 
 ### 5.1 Optimistic locking on `customer_subscriptions` and `payment_history`
 
-Both tables have a `version` column. Every update must check-and-increment the version (`UPDATE ... SET version = version + 1 WHERE id = ? AND version = ?`), and the application must treat a zero-row-affected result as a conflict to retry, not a silent no-op. This exists because both tables are written to from multiple independent paths (customer/staff edits, the retry scheduler, Stripe webhooks) — without it, whichever write lands last silently overwrites the other with no error raised.
+Both tables have a `version` column. Every update must check-and-increment the version (`UPDATE ... SET version = version + 1 WHERE id = ? AND version = ?`), and the application must treat a zero-row-affected result as a conflict, never a silent no-op. A customer- or staff-initiated request is answered with `409 CONCURRENT_MODIFICATION` so the client can re-read and decide whether to retry; the server does not retry on their behalf, because silently re-applying a user's change over a concurrent one could overwrite what the other request did. Non-interactive writers (the retry scheduler, Stripe webhooks) are not built yet, and whether they retry is decided when they are (Waves 6 to 8). This exists because both tables are written to from multiple independent paths (customer/staff edits, the retry scheduler, Stripe webhooks) — without it, whichever write lands last silently overwrites the other with no error raised.
 
-**For developers:** if you're using JPA/Hibernate, this is `@Version` and mostly automatic — but you still need to handle `OptimisticLockException` explicitly (retry the operation after re-reading the row, don't just let the request 500). If you're writing raw SQL anywhere against these two tables, you must include the version check manually; it's not enforced by a database trigger.
+**For developers:** if you're using JPA/Hibernate, this is `@Version` and mostly automatic — but conflicts still need deliberate handling: `GlobalExceptionHandler` maps `ObjectOptimisticLockingFailureException` to `409 CONCURRENT_MODIFICATION`, so request-scoped code lets it propagate. Never catch and swallow it, and never let it surface as a 500. If you're writing raw SQL anywhere against these two tables, you must include the version check manually; it's not enforced by a database trigger.
 
 **For ops:** a spike in optimistic-lock conflict/retry rate on these two tables is a genuine signal — it usually means either a scheduler is running more often than expected (possible ShedLock misconfiguration, see §6.3) or a webhook is being delivered/processed more than once. Treat repeated conflicts on the *same* row as worth investigating, not just noise to retry through.
 
@@ -240,7 +240,7 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 
 - [ ] Filter `deleted_at IS NULL` explicitly on every subscription/payment-method query — it's not automatic.
 - [ ] Never join `payment_history` back to `customer_subscriptions.amount` or live `exchange_rates` to "recompute" a historical value — the snapshot columns are already final.
-- [ ] Handle `OptimisticLockException` (or equivalent) on `customer_subscriptions` and `payment_history` writes — retry, don't fail silently or 500.
+- [ ] Let `OptimisticLockException` (or equivalent) on `customer_subscriptions` and `payment_history` writes propagate to `GlobalExceptionHandler` (409); don't swallow it or let it 500. Background writers must handle it explicitly.
 - [ ] Never log or persist a raw session/reset/verification/refresh token — only hashes.
 - [ ] Gate staff features by permission (`role_permissions` lookup), never by hardcoded `role.name` checks.
 - [ ] Write every payment attempt to `payment_attempts`, even failed ones — don't skip failure rows.
@@ -257,7 +257,7 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 
 - **Payment retries stuck at max attempts (`attempt_count = 3`, `status = 'failed'`):** alert-worthy — a customer's subscription is about to lapse involuntarily.
 - **Discrepancies between this database and Stripe's dashboard:** resolve in Stripe's favor, then reconcile here; build a scheduled reconciliation job rather than relying on customer reports.
-- **Spike in optimistic-lock conflicts on `customer_subscriptions`/`payment_history`:** investigate — possible duplicate webhook delivery or a scheduler running more often than intended.
+- **Spike in optimistic-lock conflicts on `customer_subscriptions`/`payment_history`:** investigate (it shows up as a rise in 409 `CONCURRENT_MODIFICATION` responses) — possible duplicate webhook delivery or a scheduler running more often than intended.
 - **Rapid growth of `app_logs` or `trace_spans`:** expected to be high-volume, but sustained unexpected growth is your cue to prioritize moving them to external tooling.
 - **`shedlock` row with `lock_until` in the past and no completed job:** a crashed instance likely left a stale lock — needs manual clearing and investigation into why the instance died mid-job.
 - **Duplicate customer-facing notifications reported:** should be prevented by `uq_notification_log_daily_dedup` — treat a genuine duplicate as a bug, not expected behavior.
