@@ -51,6 +51,8 @@ Registration builds a small, genuinely reusable `EmailSender` (backed by Spring'
 
 **For developers:** don't build a second email-sending mechanism for anything else that needs to send email (payment reminders, 2FA codes) — extend or call `EmailSender`, the same way `FR-33`'s 2FA challenge will.
 
+**Text messages follow the same rule.** `FR-37` adds an `SmsSender` (Twilio) with the same shape as `EmailSender`, and `FR-20`'s Strategy abstraction wraps both. Anything that sends a code or notification (2FA, phone verification, payment reminders) calls these senders and honors the customer's `preferred_contact_method` rather than building its own sending path — see `design-docs/contact_preferences_and_sms.md`. Email verification itself (`FR-30`) is unaffected by that preference.
+
 **Why `FR-32` (unverified account cleanup) is scheduled in Wave 8, not here in Wave 1, despite being part of the same feature:** it needs a scheduled job, and `FR-21` (ShedLock, the mechanism that makes a scheduled job safe to run on more than one instance) isn't built until Wave 8. Building the cleanup job now would mean either leaving it unprotected against duplicate execution temporarily, or building ShedLock early just to support one job — both worse than deferring the job itself alongside its actual dependency.
 
 ---
@@ -77,7 +79,9 @@ Registration builds a small, genuinely reusable `EmailSender` (backed by Spring'
 
 `subscription_providers.category` and `customer_subscriptions.category` are independent columns. This was added specifically because a custom (non-catalog) subscription has no `provider_id` to inherit a category from.
 
-**For developers:** decide up front (and document it, since the schema doesn't enforce either direction) whether creating a catalog subscription auto-populates `customer_subscriptions.category` from the provider's category, or whether the two are always independent. The column exists either way, but the *behavior* is an application decision not yet made.
+**DECIDED:** creating a catalog subscription auto-populates `customer_subscriptions.category` from the provider's category at creation time, as a one-time snapshot — not a live link. If a provider's category changes later (or the provider is deactivated), subscriptions already referencing it keep their original `category` value; only subscriptions created after the change pick up the new value. Same pattern as `payment_history.exchange_rate_applied` freezing the rate used at payment time rather than tracking it live. Decided as part of `FR-35` (staff provider-catalog management) — see `design-docs/provider_catalog_management.md` for the full reasoning. Not yet implemented as of this writing; `create()` does not currently populate `category` at all.
+
+**For developers:** the schema still doesn't enforce this direction — it's an application-level decision, so `create()`'s implementation must actually perform the copy; nothing about the columns themselves guarantees it.
 
 ---
 

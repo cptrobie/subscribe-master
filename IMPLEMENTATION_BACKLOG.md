@@ -78,6 +78,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 - [ ] Errors bubble up to the global exception handler rather than being caught/formatted locally (NFR-02)
 - [ ] Logging uses SLF4J at appropriate levels; no secrets/PII logged (NFR-23)
 - [ ] Request/response uses DTOs — entities are never returned directly
+- [ ] **(Staff-only endpoints)** Enforces the correct permission via a data-driven check (e.g. `hasAuthority(...)` against `role_permissions`), never a hardcoded role name (FR-06) — added once `FR-06` existed to enforce for a real staff-facing endpoint; see `staff_authorization_design.md`
 
 **New JPA entity / mapping:**
 - [ ] Every association explicitly marked `LAZY` (NFR-15)
@@ -237,9 +238,13 @@ Example of a paused wave with an optional resumption note:
 
 **Temporarily bypassed after Wave 1, resumed before Wave 4.5/Wave 9.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record. **Also worth noting when Wave 2 resumes:** `FR-33` (added here after this note was first written) is itself blocked on `FR-30`'s `EmailSender` — so Wave 2 can't fully complete until Wave 1's deferred `FR-30` also lands, independent of the Wave 4.5/Wave 9 dependencies above.
 
+**Contact-preference set (`FR-36`–`FR-39`) is split across waves by dependency.** Only `FR-36` (no dependencies) is built here; `FR-37`–`FR-39` (SMS sender, phone verification, text 2FA) are in Wave 8 beside their sibling `FR-20` and their consumer `FR-19`. Order within this wave: `FR-06` → `FR-35` → `FR-36` → `FR-33` → `FR-34` → `FR-05`. Net effect on this wave: +~12h (`FR-36` only), so it still gates Wave 4.5/Wave 9 on RBAC work, not on SMS work. See `contact_preferences_and_sms.md`.
+
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
-- `[FR-06] Role-based access control (staff roles/permissions)` — **[M]**
-- `[FR-33] Two-factor authentication (email OTP)` — **[L]** — blocked on `FR-30` (needs `EmailSender`); see `login_2fa_sequence.md` for the full design
+- `[FR-06] Role-based access control (staff roles/permissions)` — **[L]** *(revised from [M] — the original estimate covered "add role checks" in the abstract; the actual scope is staff login, staff JWT issuance, loading a staff user's permissions into the security context, and the Spring Security wiring to enforce them, none of which exist today. See `staff_authorization_design.md` for the full design, including why this is a cross-cutting blocker beyond just this wave — `FR-28` (Wave 7) also depends on it.)*
+- `[FR-35] Staff-managed subscription provider catalog (create/update/deactivate)` — **[M]** — **built immediately after `FR-06`**, before `FR-05`/`FR-33`/`FR-34` — deliberately chosen as the first real consumer of `FR-06`'s new permission infrastructure (low-stakes catalog metadata, not financial risk). **Not sourced from `task.pdf`.** See `provider_catalog_management.md` for the full design.
+- `[FR-36] Customer phone number and preferred contact method (email/text, default email), customer-updatable via API` — **[M]** — no dependencies. **Placed in Wave 2, before `FR-33`/`FR-34`:** `FR-34` also changes `customers` (`two_factor_enabled`), so making all the `customers` schema changes in one pass is cheaper than revisiting the table later. On its own it only lets a customer store a number and keep email selected — text becomes selectable once `FR-38` (Wave 8) verifies the number. Email verification (`FR-30`/`FR-31`) is unaffected. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md` for the full design.
+- `[FR-33] Two-factor authentication (email OTP)` — **[L]** — blocked on `FR-30` (needs `EmailSender`); see `login_2fa_sequence.md` for the full design. *(Ships email-only in this wave as originally designed. `FR-39` (Wave 8) later amends it to deliver the OTP on the customer's preferred channel, so this wave isn't held up by SMS work nothing downstream of Wave 2 needs.)*
 - `[FR-34] 2FA toggle (per-customer enable/disable)` — **[S]** — depends on `FR-33`
 
 ## Wave 3 — Subscription management core
@@ -302,15 +307,20 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 **Rationale:** depends on Wave 6 existing — you need a working payment flow before you can retry or refund it.
 
 - `[FR-29] Payment retry / dunning (up to 3 attempts)` — **[L]**
-- `[FR-28] Partial refund support` — **[M]**
+- `[FR-28] Partial refund support` — **[M]** — also blocked on `FR-06`: `billing_admin`'s ability to issue refunds per `ARCHITECTURE.md`'s role description means nothing until staff permission enforcement actually exists; see `staff_authorization_design.md`
 
 ## Wave 8 — Scheduling & notifications
 
 **Rationale:** depends on Wave 3 (needs `next_payment_date` to check against) and benefits from Wave 6 existing (a real payment flow to warn about).
 
+**Contact-preference set, second half (`FR-37`–`FR-39`).** Order within this wave: `FR-20` (abstraction) → `FR-37` (`SmsSender`) → `FR-38` (phone verification) → `FR-39` (text 2FA, amending `FR-33` from Wave 2) → `FR-19` routing by `preferred_contact_method`. `FR-36` (Wave 2) must already exist. These three have no dependency on Wave 3 or Wave 6 and **can be pulled forward** (right after `FR-33`) if text-message 2FA is wanted sooner; they sit here because `FR-20` and `FR-19` do and nothing earlier needs them. Adds ~48h to this wave (plus +8h from `FR-20` growing S → M).
+
 - `[FR-18] Daily scheduled payment-due check` — **[S]**
-- `[FR-19] Payment-due warning notification (log/email)` — **[M]**
-- `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[S]**
+- `[FR-19] Payment-due warning notification (log/email/text)` — **[M]** — delivered on the customer's preferred contact method (`FR-36`); `notification_log.channel`'s CHECK must add `'sms'`
+- `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[M]** *(revised from [S] — now also wraps `FR-37`'s `SmsSender` as a second strategy and selects between email and text from `preferred_contact_method`, with an email fallback on Twilio failure. See `contact_preferences_and_sms.md`.)*
+- `[FR-37] SMS sending via Twilio (SmsSender)` — **[M]** — mirrors `EmailSender`'s shape so `FR-20` wraps both later; needs a Twilio account and Vault-held credentials. **Not sourced from `task.pdf`.**
+- `[FR-38] Phone verification (SMS code) required before text can become the preferred contact method` — **[L]** — depends on `FR-36` and `FR-37`. **Not sourced from `task.pdf`.**
+- `[FR-39] 2FA code delivered on the preferred contact channel (email/text, email fallback on Twilio failure)` — **[M]** — amends `FR-33`; depends on `FR-33` and `FR-38`. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md`.
 - `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]**
 - `[FR-32] Unverified account cleanup (24h expiry) + expired refresh-token cleanup (customer_refresh_tokens.expires_at)` — **[M]** — retargeted from customer_sessions during the JWT pivot; customer_refresh_tokens is now the stateful, DB-backed table with the same unbounded-growth problem
 
