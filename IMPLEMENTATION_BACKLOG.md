@@ -247,7 +247,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-33] Two-factor authentication (email OTP)` — **[L]** — blocked on `FR-30` (needs `EmailSender`); see `login_2fa_sequence.md` for the full design. *(Ships email-only in this wave as originally designed. `FR-39` (Wave 8) later amends it to deliver the OTP on the customer's preferred channel, so this wave isn't held up by SMS work nothing downstream of Wave 2 needs.)*
 - `[FR-34] 2FA toggle (per-customer enable/disable)` — **[S]** — depends on `FR-33`
 
-## Wave 3 — Subscription management core
+## Wave 3 — Subscription management core ✅ Complete (verified via CI)
 
 **Rationale:** the core domain object everything else (payments, statistics, reports) hangs off of. Optimistic locking is introduced here specifically because this is the first mutable, multi-writer entity in the system.
 
