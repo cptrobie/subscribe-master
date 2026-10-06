@@ -53,3 +53,7 @@ precedent (see `V1`'s own migration comment for why).
 - **`customers.two_factor_enabled BOOLEAN NOT NULL DEFAULT TRUE`** — `FR-34`'s toggle target.
 - **`customer_two_factor_codes`** — the OTP challenge record itself: code hash, expiry,
   attempt count. Exact columns to be finalized when `FR-33` is actually built.
+
+## Amendment: delivery channel (`FR-39`)
+
+The diagram above shows email only. Under `FR-36`–`FR-39` the code is sent on the customer's **preferred contact channel** (email or text), a wrong-code resend uses the same channel, and a Twilio failure falls back to email (audit-logged) instead of locking the customer out. `customer_two_factor_codes` also records the channel used. The password-first order, attempt limit and lockout rules are unchanged. `FR-33` ships email-only first (Wave 2); `FR-39` (Wave 8) makes this change. Full design: `contact_preferences_and_sms.md`.

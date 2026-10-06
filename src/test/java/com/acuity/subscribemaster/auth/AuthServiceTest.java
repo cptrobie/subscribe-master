@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.BDDAssertions.within;
 import static org.mockito.Mockito.*;
 
+import com.acuity.subscribemaster.auditlog.ActorType;
+import com.acuity.subscribemaster.auditlog.AuditAction;
 import com.acuity.subscribemaster.auditlog.AuditLogService;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
@@ -75,7 +77,8 @@ class AuthServiceTest {
 
     // Assert: audit event recorded with the correct actor/resource
     verify(auditLogService, times(1))
-        .recordEvent("customer", customerId, "REGISTERED", "customers", customerId, ipAddress);
+        .recordEvent(
+            ActorType.CUSTOMER, customerId, AuditAction.REGISTERED, "auth", customerId, ipAddress);
 
     // Assert: response reflects the saved customer
     assertThat(response.id()).isEqualTo(customerId);
@@ -115,7 +118,12 @@ class AuthServiceTest {
     // Assert: rejection is audited against the existing account, not a new one
     verify(auditLogService, times(1))
         .recordEvent(
-            "customer", existingId, "REGISTRATION_REJECTED", "customers", existingId, ipAddress);
+            ActorType.CUSTOMER,
+            existingId,
+            AuditAction.REGISTRATION_REJECTED,
+            "auth",
+            existingId,
+            ipAddress);
   }
 
   // TODO: Commenting out now because its not in scope however when we add idempotency it may
@@ -267,10 +275,10 @@ class AuthServiceTest {
     // Assert: that the lockout trigger has been met which justifies an audit record
     verify(auditLogService, times(1))
         .recordEvent(
-            "customer",
+            ActorType.CUSTOMER,
             registeredCustomer.getId(),
-            "ACCOUNT_LOCKED",
-            "customers",
+            AuditAction.ACCOUNT_LOCKED,
+            "auth",
             registeredCustomer.getId(),
             ipAddress);
   }

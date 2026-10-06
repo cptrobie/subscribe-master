@@ -95,6 +95,11 @@
             <artifactId>spring-boot-resttestclient</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- NFR-11: coverage enforcement is active (30% minimum). A threshold this
               low only meaningfully applies once real business logic and tests exist;
               see git blame if you need the history of when/why this was enabled. -->
@@ -135,7 +140,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
             <!-- Resolves mockito-core's jar path into a ${groupId:artifactId:type}
-                 property so it can be loaded as a proper -javaagent below, instead
+                 property so it can be loaded as a proper-javaagent below, instead
                  of Mockito self-attaching at runtime (deprecated by the JDK; see
                  the warning Mockito prints without this). -->
             <plugin>

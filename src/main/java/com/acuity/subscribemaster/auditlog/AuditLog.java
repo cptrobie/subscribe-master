@@ -27,15 +27,15 @@ public class AuditLog {
   private UUID id;
 
   @Column(name = "actor_type", nullable = false, updatable = false)
-  private String actorType;
+  private ActorType actorType;
 
   @Column(name = "actor_id", nullable = false, updatable = false)
   private UUID actorId;
 
-  @Column(nullable = false, updatable = false)
-  private String action;
+  @Column(name = "action", nullable = false, updatable = false)
+  private AuditAction action;
 
-  @Column(nullable = false, updatable = false)
+  @Column(name = "resource", nullable = false, updatable = false)
   private String resource;
 
   @Column(name = "resource_id", updatable = false)
@@ -52,9 +52,9 @@ public class AuditLog {
   protected AuditLog() {}
 
   public AuditLog(
-      String actorType,
+      ActorType actorType,
       UUID actorId,
-      String action,
+      AuditAction action,
       String resource,
       UUID resourceId,
       String ipAddress) {
@@ -70,7 +70,7 @@ public class AuditLog {
     return id;
   }
 
-  public String getActorType() {
+  public ActorType getActorType() {
     return actorType;
   }
 
@@ -78,7 +78,7 @@ public class AuditLog {
     return actorId;
   }
 
-  public String getAction() {
+  public AuditAction getAction() {
     return action;
   }
 

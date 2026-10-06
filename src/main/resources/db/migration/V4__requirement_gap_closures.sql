@@ -1,6 +1,6 @@
 -- =====================================================================
 -- V4 — Requirement gap closures
--- Closes four gaps found when cross-checking the schema against the
+-- Closes six gaps found when cross-checking the schema against the
 -- Subscribe Master requirements doc:
 --   1. Optimistic locking (NFR-04) — version column on the two tables
 --      most exposed to concurrent writes.
@@ -8,6 +8,12 @@
 --   3. Notification tracking, to avoid duplicate payment-due reminders
 --      (FR-19/FR-20).
 --   4. Scheduler concurrency safety via ShedLock (FR-21).
+--   5. Cancellation reason tracking — distinguishes voluntary
+--      cancellation from payment-failure-triggered cancellation,
+--      without expanding customer_subscriptions.status itself.
+--   6. next_payment_date nullability — pause()/cancel() intentionally
+--      null this column to signal no upcoming charge is scheduled, which
+--      conflicted with the original NOT NULL constraint.
 -- =====================================================================
 
 -- --- 1. Optimistic locking -----------------------------------------------
@@ -73,3 +79,21 @@ CREATE TABLE shedlock (
     locked_at   TIMESTAMP NOT NULL,
     locked_by   VARCHAR(255) NOT NULL
 );
+
+
+-- --- 5. Cancellation reason tracking ---------------------------------
+
+ALTER TABLE customer_subscriptions
+    ADD COLUMN cancellation_reason TEXT
+        CHECK (cancellation_reason IS NULL OR cancellation_reason IN (
+            'customer_requested', 'payment_failure', 'staff_action'
+        ));
+
+
+-- --- 6. Next payment date nullability --------------------------------
+-- pause()/cancel() null this column to indicate no charge is currently
+-- scheduled. The original NOT NULL constraint contradicted that
+-- documented behavior.
+
+ALTER TABLE customer_subscriptions
+    ALTER COLUMN next_payment_date DROP NOT NULL;

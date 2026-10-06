@@ -3,6 +3,8 @@ package com.acuity.subscribemaster.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import com.acuity.subscribemaster.auditlog.ActorType;
+import com.acuity.subscribemaster.auditlog.AuditAction;
 import com.acuity.subscribemaster.auditlog.AuditLogRepository;
 import com.acuity.subscribemaster.auth.dto.LoginRequest;
 import com.acuity.subscribemaster.auth.dto.LoginResponse;
@@ -10,6 +12,7 @@ import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.error.ApiError;
+import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.support.PemKeys;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.SignedJWT;
@@ -179,9 +182,10 @@ public class AuthControllerIT {
     assertThat(savedCustomer.getPasswordHash()).isNotEqualTo(rawPassword);
     assertThat(passwordEncoder.matches(rawPassword, savedCustomer.getPasswordHash())).isTrue();
 
-    var auditEvents = auditLogRepo.findByActorIdAndAction(savedCustomer.getId(), "REGISTERED");
+    var auditEvents =
+        auditLogRepo.findByActorIdAndAction(savedCustomer.getId(), AuditAction.REGISTERED);
     assertThat(auditEvents).hasSize(1);
-    assertThat(auditEvents.get(0).getResource()).isEqualTo("customers");
+    assertThat(auditEvents.get(0).getResource()).isEqualTo("auth");
     assertThat(auditEvents.get(0).getResourceId()).isEqualTo(savedCustomer.getId());
   }
 
@@ -197,7 +201,7 @@ public class AuthControllerIT {
 
     assertThat(secondAttempt.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(secondAttempt.getBody()).isNotNull();
-    assertThat(secondAttempt.getBody().code()).isEqualTo("ACCOUNT_ALREADY_EXISTS");
+    assertThat(secondAttempt.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_ALREADY_EXISTS.name());
     assertThat(customerRepo.existsByEmail(email)).isTrue();
   }
 
@@ -214,7 +218,7 @@ public class AuthControllerIT {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().code()).isEqualTo("ACCOUNT_ALREADY_EXISTS");
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_ALREADY_EXISTS.name());
 
     // RegistrationRequest normalizes email to lowercase before it ever reaches AuthService,
     // so both requests above resolve to the identical string "case.test@example.com" --
@@ -227,9 +231,10 @@ public class AuthControllerIT {
     assertThat(savedCustomer.getEmail()).isEqualTo("case.test@example.com");
 
     var rejections =
-        auditLogRepo.findByActorIdAndAction(savedCustomer.getId(), "REGISTRATION_REJECTED");
+        auditLogRepo.findByActorIdAndAction(
+            savedCustomer.getId(), AuditAction.REGISTRATION_REJECTED);
     assertThat(rejections).hasSize(1);
-    assertThat(rejections.get(0).getActorType()).isEqualTo("customer");
+    assertThat(rejections.get(0).getActorType()).isEqualTo(ActorType.CUSTOMER);
   }
 
   @Test
@@ -241,7 +246,7 @@ public class AuthControllerIT {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().code()).isEqualTo("VALIDATION_FAILED");
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_FAILED.name());
     assertThat(response.getBody().fieldErrors())
         .extracting(ApiError.FieldError::field)
         .contains("email", "password");
@@ -258,7 +263,7 @@ public class AuthControllerIT {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().code()).isEqualTo("MALFORMED_REQUEST");
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.MALFORMED_REQUEST.name());
   }
 
   @Test
@@ -312,7 +317,7 @@ public class AuthControllerIT {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().code()).isEqualTo("INVALID_CREDENTIALS");
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
   }
 
   @Test
@@ -328,6 +333,6 @@ public class AuthControllerIT {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().code()).isEqualTo("INVALID_CREDENTIALS");
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
   }
 }
