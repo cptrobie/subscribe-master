@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -34,6 +35,18 @@ public class GlobalExceptionHandler {
         ApiError.of(
             HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND, ex.getMessage(), request.getRequestURI());
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+  }
+
+  @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+  public ResponseEntity<ApiError> handleOptimisticLockConflict(
+      ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+    ApiError body =
+        ApiError.of(
+            HttpStatus.CONFLICT,
+            ErrorCode.CONCURRENT_MODIFICATION,
+            "This record was modified by another request. Refresh and try again.",
+            request.getRequestURI());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
   }
 
   @ExceptionHandler(InvalidSubscriptionIdentityException.class)
