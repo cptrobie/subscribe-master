@@ -87,6 +87,10 @@ public class SubscriptionController {
     @ApiResponse(
         responseCode = "409",
         description = "Subscription is not in a pausable state",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "409",
+        description = "Subscription was modified by another request",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
   @PostMapping(path = "/{id}/pause", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -112,6 +116,10 @@ public class SubscriptionController {
     @ApiResponse(
         responseCode = "409",
         description = "Subscription has already been cancelled",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "409",
+        description = "Subscription was modified by another request",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
   @PostMapping(path = "/{id}/cancel", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -139,6 +147,10 @@ public class SubscriptionController {
     @ApiResponse(
         responseCode = "409",
         description = "Subscription is not in a paused state",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "409",
+        description = "Subscription was modified by another request",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
   @PostMapping(path = "/{id}/resume", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -168,6 +180,10 @@ public class SubscriptionController {
     @ApiResponse(
         responseCode = "404",
         description = "Subscription for update was not found",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "409",
+        description = "Subscription was modified by another request",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
   @PutMapping(

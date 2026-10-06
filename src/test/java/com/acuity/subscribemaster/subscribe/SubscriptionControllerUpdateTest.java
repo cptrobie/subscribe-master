@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 public class SubscriptionControllerUpdateTest extends AbstractSubscriptionControllerTest {
 
@@ -222,5 +223,41 @@ public class SubscriptionControllerUpdateTest extends AbstractSubscriptionContro
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ErrorCode.MALFORMED_REQUEST.name()))
         .andExpect(jsonPath("$.message").value("No matching route for this request."));
+  }
+
+  /*
+   * A controller-level test here never touches real optimistic locking — it only proves that when
+   * the (mocked) service throws ObjectOptimisticLockingFailureException, GlobalExceptionHandler
+   *  correctly maps it to 409/CONCURRENT_MODIFICATION. The real "does locking actually work"
+   * Test can be found in the IT, still pending. This one's just closing the controller-to-handler
+   *  wiring gap for update():
+   */
+
+  @Test
+  void rejected_concurrentModification_returnsConflict() throws Exception {
+    var subscriptionId = UUID.randomUUID();
+    var accountIdentifier = "accountIdentifier";
+    var amount = new BigDecimal("9.99");
+    var currency = Currency.EUR;
+    var billFreq = BillingFrequency.MONTHLY;
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    var validPutRequest =
+        new SubscriptionUpdateRequest(null, accountIdentifier, currency, amount, billFreq, null);
+
+    when(subscriptionSvc.update(customerId, subscriptionId, validPutRequest, ipAddress))
+        .thenThrow(
+            new ObjectOptimisticLockingFailureException(
+                CustomerSubscription.class, subscriptionId));
+
+    mvc.perform(
+            put("/api/v1/subscribe/{id}", subscriptionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validPutRequest)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value(ErrorCode.CONCURRENT_MODIFICATION.name()))
+        .andExpect(
+            jsonPath("$.message")
+                .value("This record was modified by another request. Refresh and try again."));
   }
 }

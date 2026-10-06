@@ -14,6 +14,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 public class SubscriptionControllerStatusTransitionTest extends AbstractSubscriptionControllerTest {
 
@@ -236,5 +238,73 @@ public class SubscriptionControllerStatusTransitionTest extends AbstractSubscrip
     mvc.perform(post("/api/v1/subscribe/{id}/resume", subscriptionId))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ErrorCode.MALFORMED_REQUEST.name()));
+  }
+
+  /*
+   * A controller-level test here never touches real optimistic locking — it only proves that when
+   * the (mocked) service throws ObjectOptimisticLockingFailureException, GlobalExceptionHandler
+   *  correctly maps it to 409/CONCURRENT_MODIFICATION. The real "does locking actually work"
+   * Test can be found in the IT, still pending. This one's just closing the controller-to-handler
+   *  wiring gap for update():
+   */
+
+  @Test
+  void rejected_pauseConcurrentModification_returnsConflict() throws Exception {
+    var subscriptionId = UUID.randomUUID();
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    when(subscriptionSvc.pause(customerId, subscriptionId, ipAddress))
+        .thenThrow(
+            new ObjectOptimisticLockingFailureException(
+                CustomerSubscription.class, subscriptionId));
+
+    mvc.perform(
+            post("/api/v1/subscribe/{id}/pause", subscriptionId)
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value(ErrorCode.CONCURRENT_MODIFICATION.name()))
+        .andExpect(
+            jsonPath("$.message")
+                .value("This record was modified by another request. Refresh and try again."));
+  }
+
+  @Test
+  void rejected_cancelConcurrentModification_returnsConflict() throws Exception {
+    var subscriptionId = UUID.randomUUID();
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    when(subscriptionSvc.cancel(customerId, subscriptionId, ipAddress))
+        .thenThrow(
+            new ObjectOptimisticLockingFailureException(
+                CustomerSubscription.class, subscriptionId));
+
+    mvc.perform(
+            post("/api/v1/subscribe/{id}/cancel", subscriptionId)
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value(ErrorCode.CONCURRENT_MODIFICATION.name()))
+        .andExpect(
+            jsonPath("$.message")
+                .value("This record was modified by another request. Refresh and try again."));
+  }
+
+  @Test
+  void rejected_resumeConcurrentModification_returnsConflict() throws Exception {
+    var subscriptionId = UUID.randomUUID();
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    when(subscriptionSvc.resume(customerId, subscriptionId, ipAddress))
+        .thenThrow(
+            new ObjectOptimisticLockingFailureException(
+                CustomerSubscription.class, subscriptionId));
+
+    mvc.perform(
+            post("/api/v1/subscribe/{id}/resume", subscriptionId)
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value(ErrorCode.CONCURRENT_MODIFICATION.name()))
+        .andExpect(
+            jsonPath("$.message")
+                .value("This record was modified by another request. Refresh and try again."));
   }
 }
