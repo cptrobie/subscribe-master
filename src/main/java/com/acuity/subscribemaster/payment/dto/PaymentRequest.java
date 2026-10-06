@@ -1,4 +1,4 @@
-package com.acuity.subscribemaster.auth.dto;
+package com.acuity.subscribemaster.payment.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -8,7 +8,7 @@ import java.util.Locale;
 
 /** Login request body. */
 @Schema(name = "LoginRequest")
-public record LoginRequest(
+public record PaymentRequest(
     @Schema(example = "addme@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank
         @Email
@@ -29,7 +29,7 @@ public record LoginRequest(
   // unverified, not confirmed broken. See AuthControllerIT.duplicateEmailDifferentCase_...
   // for the test coverage this enables.
   // Left null on a null email so @NotBlank still reports its own message instead of NPEing here.
-  public LoginRequest {
+  public PaymentRequest {
     if (email != null) {
       email = email.strip().toLowerCase(Locale.ROOT);
     }

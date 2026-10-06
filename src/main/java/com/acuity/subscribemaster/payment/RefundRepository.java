@@ -1,4 +1,6 @@
 package com.acuity.subscribemaster.payment;
 
-public interface RefundRepository {
-}
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface RefundRepository extends JpaRepository<Refund, UUID> {}

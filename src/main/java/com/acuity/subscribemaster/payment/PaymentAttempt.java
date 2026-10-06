@@ -19,18 +19,19 @@ public class PaymentAttempt {
   @Column(name = "payment_history_id", nullable = false)
   private UUID paymentHistoryId;
 
-  @Column(name = "attempt_number")
-  private int attemptNumber;
+  @Column(name = "attempt_number", nullable = false)
+  private short attemptNumber = 1;
 
   @Column(name = "stripe_payment_intent_id")
   private String stripePaymentIntentId;
 
+  @Column(name = "status", nullable = false)
   private PaymentAttemptStatus status;
 
   @Column(name = "failure_reason")
   private String failureReason;
 
-  @Column(name = "attempted_at")
+  @Column(name = "attempted_at", nullable = false)
   private Instant attemptedAt;
 
   public PaymentAttempt() {}
@@ -47,11 +48,11 @@ public class PaymentAttempt {
     this.paymentHistoryId = paymentHistoryId;
   }
 
-  public int getAttemptNumber() {
+  public short getAttemptNumber() {
     return attemptNumber;
   }
 
-  public void setAttemptNumber(int attemptNumber) {
+  public void setAttemptNumber(short attemptNumber) {
     this.attemptNumber = attemptNumber;
   }
 

@@ -7,4 +7,6 @@
 
 ALTER TABLE audit_logs
     ADD CONSTRAINT audit_logs_action_check
-        CHECK (action IN ('registered', 'account_locked', 'registration_rejected', 'subscription_cancelled'));
+        CHECK (action IN ('registered', 'account_locked', 'registration_rejected',
+    'subscription_created', 'subscription_cancelled', 'subscription_paused',
+    'subscription_resumed', 'subscription_updated'));

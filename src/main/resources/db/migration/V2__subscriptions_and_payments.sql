@@ -92,7 +92,8 @@ CREATE TABLE customer_subscriptions (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_subscription_has_name CHECK (provider_id IS NOT NULL OR custom_name IS NOT NULL),
-    CONSTRAINT chk_custom_interval CHECK (billing_frequency <> 'custom' OR billing_interval_days IS NOT NULL)
+    CONSTRAINT chk_custom_interval CHECK (billing_frequency <> 'custom' OR billing_interval_days IS NOT NULL),
+    CONSTRAINT chk_customer_subscriptions_interval_positive CHECK (billing_interval_days IS NULL OR billing_interval_days > 0)
 );
 
 CREATE INDEX idx_customer_subscriptions_customer_id ON customer_subscriptions (customer_id);

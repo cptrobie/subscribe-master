@@ -51,6 +51,16 @@ spring:
     # (classpath:db/migration, i.e. src/main/resources/db/migration/), so
     # they're picked up automatically and packaged into the built JAR.
 
+
+  # The setting below is required for NoHandlerFoundException to
+  # actually be thrown (and reach GlobalExceptionHandler) on an unmatched route.
+  # Without add-mappings: false, Spring Boot's static-resource handler claims
+  # unmatched paths first, so NoHandlerFoundException is never thrown
+  # for GlobalExceptionHandler to catch.
+  web:
+    resources:
+      add-mappings: false
+
 app:
   jwt:
     access-token-duration-minutes: 15

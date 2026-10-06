@@ -1,21 +1,51 @@
-package com.acuity.subscribemaster.auth.dto;
+package com.acuity.subscribemaster.payment.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
 /** Login response body. On success, the token is provided in the Response body. */
-@Schema(name = "LoginResponse")
-public record LoginResponse(
+@Schema(name = "PaymentResponse")
+public record PaymentResponse(
     UUID id,
-    @Schema(example = "addme@example.com") String email,
-    @Schema(example = "false") boolean emailVerified,
-    @Schema(example = "a1b2c3Z9xY87") String token,
-    Instant expiresAt,
-    String message) {
+    UUID subscriptionId,
+    UUID paymentMethodId,
+    String status,
+    BigDecimal amount,
+    String currency,
+    BigDecimal baseCurrencyAmount,
+    String baseCurrency,
+    BigDecimal exchangeRateApplied,
+    Instant scheduledAt,
+    Instant paidAt,
+    Instant createdAt) {
 
-  public static LoginResponse accepted(
-      UUID id, String email, boolean emailVerified, String token, Instant expiresAt) {
-    return new LoginResponse(id, email, emailVerified, token, expiresAt, "Login successful.");
+  public static PaymentResponse paymentMade(
+      UUID id,
+      UUID subscriptionId,
+      UUID paymentMethodId,
+      String status,
+      BigDecimal amount,
+      String currency,
+      BigDecimal baseCurrencyAmount,
+      String baseCurrency,
+      BigDecimal exchangeRateApplied,
+      Instant scheduledAt,
+      Instant paidAt,
+      Instant createdAt) {
+    return new PaymentResponse(
+        id,
+        subscriptionId,
+        paymentMethodId,
+        status,
+        amount,
+        currency,
+        baseCurrencyAmount,
+        baseCurrency,
+        exchangeRateApplied,
+        scheduledAt,
+        paidAt,
+        createdAt);
   }
 }

@@ -19,10 +19,10 @@ public class Refund {
   @Column(name = "payment_history_id", nullable = false)
   private UUID paymentHistoryId;
 
-  @Column(nullable = false)
+  @Column(name = "amount", nullable = false)
   private BigDecimal amount;
 
-  @Column(nullable = false)
+  @Column(name = "reason", nullable = false)
   private String reason;
 
   @Column(name = "stripe_refund_id", unique = true)

@@ -6,7 +6,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "payment_history")
@@ -17,36 +19,44 @@ public class PaymentHistory {
   @Column(nullable = false, updatable = false)
   private UUID id;
 
-  @Column(name = "subscription_id")
+  @Column(name = "subscription_id", nullable = false)
   private UUID subscriptionId;
 
   @Column(name = "payment_method_id")
   private UUID paymentMethodId;
 
-  @Version private int version;
+  @Column(name = "version")
+  @Version
+  private int version;
 
   @Column(name = "attempt_count", nullable = false)
-  private int attemptCount = 0;
+  private short attemptCount = 0;
 
+  @Column(name = "amount", nullable = false)
   private BigDecimal amount;
 
-  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.CHAR)
+  @Column(name = "currency", columnDefinition = "char(3)", nullable = false)
   private Currency currency;
 
   @Column(name = "base_currency_amount")
   private BigDecimal baseCurrencyAmount;
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "base_currency")
+  @JdbcTypeCode(SqlTypes.CHAR)
+  @Column(name = "base_currency", columnDefinition = "char(3)")
   private Currency baseCurrency;
 
   @Column(name = "exchange_rate_applied")
   private BigDecimal exchangeRateApplied;
 
+  @Column(name = "status", nullable = false)
   private PaymentStatus status;
 
   @Column(name = "scheduled_at", nullable = false)
   private Instant scheduledAt;
+
+  @Column(name = "last_attempted_at")
+  private Instant lastAttemptedAt;
 
   @Column(name = "paid_at")
   private Instant paidAt;
@@ -81,11 +91,11 @@ public class PaymentHistory {
     return version;
   }
 
-  public int getAttemptCount() {
+  public short getAttemptCount() {
     return attemptCount;
   }
 
-  public void setAttemptCount(int paymentCount) {
+  public void setAttemptCount(short paymentCount) {
     this.attemptCount = paymentCount;
   }
 
@@ -143,6 +153,14 @@ public class PaymentHistory {
 
   public void setScheduledAt(Instant scheduledAtAt) {
     this.scheduledAt = scheduledAtAt;
+  }
+
+  public Instant getLastAttemptedAt() {
+    return lastAttemptedAt;
+  }
+
+  public void setLastAttemptedAt(Instant lastAttemptedAt) {
+    this.lastAttemptedAt = lastAttemptedAt;
   }
 
   public Instant getPaidAt() {
