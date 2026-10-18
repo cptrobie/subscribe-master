@@ -9,6 +9,12 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * OpenAPI metadata for the generated Swagger documentation (NFR-09, via springdoc): API title,
+ * description, version, contact and license, plus a {@code bearerAuth} HTTP bearer (JWT) security
+ * scheme. The scheme is only defined here, not applied globally, since some endpoints (e.g.
+ * registration) are called without a token.
+ */
 @Configuration
 class OpenApiConfig {
 

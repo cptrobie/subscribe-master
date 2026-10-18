@@ -17,6 +17,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Customer-facing subscription operations: create, update, read, and the pause / resume / cancel
+ * transitions (FR-07, FR-09). Every lookup is scoped to the calling customer, and every write is
+ * recorded to {@code audit_logs} via {@link AuditLogService}.
+ *
+ * <p>Resuming recalculates {@code next_payment_date} only if it is already before today, stepping
+ * it forward one billing interval at a time so the original billing day is kept (FR-08; see {@code
+ * design-docs/subscription_status_transitions.md}).
+ */
 @Service
 public class SubscriptionService {
 

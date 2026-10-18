@@ -12,6 +12,23 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * A customer's tracked subscription (table {@code customer_subscriptions}, created in {@code
+ * V2__subscriptions_and_payments.sql}; {@code version}, {@code category} and {@code
+ * cancellation_reason} added in {@code V4}) -- FR-07. It is identified either by {@code
+ * provider_id} (the {@link SubscriptionProvider} catalog) or by {@code custom_name}
+ * (ARCHITECTURE.md &sect;3.2).
+ *
+ * <p>Status changes go through {@link #pause()}, {@link #resume(LocalDate)} and {@link
+ * #cancel(Instant, CancellationReason)} rather than a status setter, enforcing FR-09's transitions
+ * (see {@code design-docs/subscription_status_transitions.md}): only {@code ACTIVE} can pause, only
+ * {@code PAUSED} can resume, and {@code CANCELLED} is terminal; anything else throws {@link
+ * InvalidStateTransitionException}.
+ *
+ * <p>{@code @Version} provides optimistic locking (NFR-04, ARCHITECTURE.md &sect;5.1). {@code
+ * deleted_at} is the soft-delete marker (FR-11, ARCHITECTURE.md &sect;3.1); nothing here sets it
+ * yet.
+ */
 @Entity
 @Table(name = "customer_subscriptions")
 public class CustomerSubscription {
@@ -128,9 +145,10 @@ public class CustomerSubscription {
   }
 
   /**
-   * Cancels the subscription. Clears nextPaymentDate for the same reason pause() does — a cancelled
-   * row should never look "due" to a date-driven billing check that only inspects nextPaymentDate
-   * without also checking status.
+   * Cancels the subscription. Clears nextPaymentDate -- unlike pause(), which deliberately keeps it
+   * as the resume anchor -- so a cancelled row never looks "due" to a date-driven billing check
+   * that only inspects nextPaymentDate without also checking status. (V4's migration comment says
+   * pause() clears it too; that comment is out of date, but V4 can't be edited once applied.)
    *
    * @throws InvalidStateTransitionException if state already equal to cancel
    */

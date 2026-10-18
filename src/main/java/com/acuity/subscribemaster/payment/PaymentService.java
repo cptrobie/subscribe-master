@@ -10,6 +10,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Payment-history lookup and per-attempt recording -- early scaffolding for FR-29's retry flow.
+ *
+ * <p>{@link #getPaymentById} backs {@link PaymentController}'s {@code GET}. {@link #recordAttempt}
+ * writes a {@link PaymentAttempt} and updates the parent {@link PaymentHistory}'s attempt count,
+ * last-attempted time and status in one transaction, but nothing calls it yet, and the
+ * attempts-exhausted branch (at {@code app.payment.retry.max-attempts}) is an empty placeholder.
+ * See {@code design-docs/payment_retry_and_dunning.md} for the intended design.
+ */
 @Service
 public class PaymentService {
   private final PaymentHistoryRepository paymentHistRepo;

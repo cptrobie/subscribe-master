@@ -5,6 +5,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+/**
+ * Provides the application's {@link PasswordEncoder}: BCrypt with a cost factor of 12 (FR-03). See
+ * the comment in {@link #passwordEncoder()} for why 12 and when to revisit it.
+ */
 @Configuration
 class PasswordEncoderConfig {
   @Bean
