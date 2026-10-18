@@ -252,6 +252,7 @@ class AuthServiceTest {
     // Assert: successful login resets both lockout-tracking fields
     assertThat(loggedInCustomer.getFailedLoginCount()).isEqualTo(0);
     assertThat(loggedInCustomer.getLockedUntil()).isNull();
+    verifyNoInteractions(auditLogService);
   }
 
   @Test
@@ -271,6 +272,7 @@ class AuthServiceTest {
     // comparison attempted (there's no real customer/password hash to compare against)
     verify(jwtIssuer, never()).issue(any());
     verify(passwordEncoder, never()).matches(anyString(), anyString());
+    verifyNoInteractions(auditLogService);
   }
 
   @Test
@@ -298,7 +300,7 @@ class AuthServiceTest {
 
     // Assert: a single below-threshold failure is NOT audited -- only the lockout
     // trigger itself is (see the class Javadoc's reasoning on audit-log noise)
-    verify(auditLogService, never()).recordEvent(any(), any(), any(), any(), any(), any());
+    verifyNoInteractions(auditLogService);
   }
 
   @Test
@@ -369,12 +371,12 @@ class AuthServiceTest {
 
     // Assert: a single above-threshold failure is NOT audited -- only the lockout
     // trigger itself is (see the class Javadoc's reasoning on audit-log noise)
-    verify(auditLogService, never()).recordEvent(any(), any(), any(), any(), any(), any());
+    verifyNoInteractions(auditLogService);
   }
 
   @Test
   void
-      previouslyLockedAccountLockTimeHasExpired_respondsByResettingFailedLoginCountToZeroAndLockedUnitToNull() {
+      previouslyLockedAccountLockTimeHasExpired_respondsByResettingFailedLoginCountToZeroAndLockedUntilToNull() {
     // Arrange
     var email = "test@example.com";
     var rawPassword = "easyPassword!#123";
@@ -398,5 +400,32 @@ class AuthServiceTest {
     // Assert: successful login resets both lockout-tracking fields
     assertThat(retryCustomer.getFailedLoginCount()).isEqualTo(0);
     assertThat(retryCustomer.getLockedUntil()).isNull();
+  }
+
+  @Test
+  void lockExpiredThenWrongPassword_restartsFailedCountAtOneAndClearsLock() {
+    // Arrange
+    var customerId = UUID.randomUUID();
+    var email = "test@example.com";
+    var wrongPassword = "guessedAtPassword";
+    var encodedPassword = "bCrypted_password";
+    var ipAddress = "192.168.0.1";
+
+    var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
+    registeredCustomer.setFailedLoginCount(5); // the max-attempts value from setUp
+    registeredCustomer.setLockedUntil(Instant.now().minus(30L, ChronoUnit.SECONDS));
+
+    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
+    when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
+
+    // Act & Assert
+    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
+        .isInstanceOf(InvalidCredentialsException.class);
+
+    // Assert: the expired lock was cleared, so this failure counts as attempt one, not a re-lock
+    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(1);
+    assertThat(registeredCustomer.getLockedUntil()).isNull();
+
+    verifyNoInteractions(auditLogService);
   }
 }

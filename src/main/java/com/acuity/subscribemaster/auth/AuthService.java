@@ -57,20 +57,29 @@ import org.springframework.transaction.annotation.Transactional;
  * itself, the same vulnerability {@link AccountAlreadyExistsException}'s generic message already
  * guards against on registration.
  *
- * <p><b>Lockout</b> ({@code app.login-lockout.max-attempts} failed attempts within {@code
- * app.login-lockout.duration-minutes}) is live-expiry-checked on {@code customers.locked_until},
- * not a scheduled job -- same reasoning as FR-33's 2FA lockout design. Unlike the
- * credential-unification above, a locked account returns a distinct {@link AccountLockedException},
- * not the generic {@link InvalidCredentialsException} -- deliberately, after weighing the
- * trade-off: a genuine user locked out by a handful of mistyped attempts has no way to know why
- * their presumably-correct password stopped working, or when to retry, under a fully generic
- * response. The information this reveals to an attacker (that the account exists) costs them {@code
- * app.login-lockout.max-attempts} full attempts to obtain, versus a single request via registration
- * enumeration -- a meaningfully higher attack cost, and lockout itself already blocks sustained
- * automated probing regardless of what the response reveals. Only the lockout trigger itself (the
- * 5th failure) is audited, attributed to the real customer being locked -- not every failed
- * attempt, which would make audit_logs unusably noisy for what's often just a routine mistyped
- * password.
+ * <p><b>Lockout</b> ({@code app.login-lockout.max-attempts} consecutive failed attempts lock the
+ * account for {@code app.login-lockout.duration-minutes}) is live-expiry-checked on {@code
+ * customers.locked_until}, not a scheduled job -- same reasoning as FR-33's 2FA lockout design.
+ * Unlike the credential-unification above, a locked account returns a distinct {@link
+ * AccountLockedException}, not the generic {@link InvalidCredentialsException} -- deliberately,
+ * after weighing the trade-off: a genuine user locked out by a handful of mistyped attempts has no
+ * way to know why their presumably-correct password stopped working, or when to retry, under a
+ * fully generic response. The information this reveals to an attacker (that the account exists)
+ * costs them {@code app.login-lockout.max-attempts} full attempts to obtain, versus a single
+ * request via registration enumeration -- a meaningfully higher attack cost, and lockout itself
+ * already blocks sustained automated probing regardless of what the response reveals. Only the
+ * lockout trigger itself (the 5th failure) is audited, attributed to the real customer being locked
+ * -- not every failed attempt, which would make audit_logs unusably noisy for what's often just a
+ * routine mistyped password.
+ *
+ * <p><b>Failure state survives the exception.</b> {@link #login} records a failed attempt (and, on
+ * the threshold failure, the lock itself) and then throws, so it's marked {@code noRollbackFor}
+ * both exceptions -- otherwise Spring's default rollback on unchecked exceptions discards the
+ * counter and lock every time, and the account never locks. The ACCOUNT_LOCKED audit entry is
+ * unaffected either way, since {@link AuditLogService} writes in its own REQUIRES_NEW transaction;
+ * that's what hid the original bug. An expired lock is cleared, with the counter reset to zero,
+ * before the password is checked, so the first wrong password after a lock runs out counts as
+ * attempt one rather than re-locking the account immediately.
  *
  * <p><b>Known, deliberately deferred gap:</b> nonexistent-email login attempts get no rate-limiting
  * or audit logging at all -- there's no customer row to attach a counter to. A real fix needs
@@ -176,7 +185,7 @@ public class AuthService {
         customer.getCreatedAt());
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = {InvalidCredentialsException.class, AccountLockedException.class})
   public LoginResponse login(String email, String password, String ipAddress) {
     var maskedEmail = EmailMasker.mask(email);
 
@@ -185,10 +194,18 @@ public class AuthService {
     // 1. Check login credential's validity
     var customer = customerRepo.findByEmail(email).orElseThrow(this::invalidCredentials);
 
-    // 2. Check if Customer is Locked
-    if (customer.getLockedUntil() != null && customer.getLockedUntil().isAfter(Instant.now())) {
-      logger.warn("Customer {}: account is locked", customer.getId());
-      throw new AccountLockedException();
+    // 2. Reject if locked; reset an expired lock
+    var now = Instant.now();
+    var lockedUntil = customer.getLockedUntil();
+
+    if (lockedUntil != null) {
+      if (lockedUntil.isAfter(now)) {
+        logger.warn("Customer {}: account is locked", customer.getId());
+        throw new AccountLockedException();
+      }
+      customer.setFailedLoginCount(0);
+      customer.setLockedUntil(null);
+      logger.info("Customer {}: expired lock cleared", customer.getId());
     }
 
     // 3. Verify the password & set the failedLoginCounter if not verified
@@ -199,7 +216,7 @@ public class AuthService {
       if (customer.getFailedLoginCount() < maxLoginAttempts) {
         throw invalidCredentials();
       }
-      customer.setLockedUntil(Instant.now().plus(lockoutDurationMinutes, ChronoUnit.MINUTES));
+      customer.setLockedUntil(now.plus(lockoutDurationMinutes, ChronoUnit.MINUTES));
       throw lockAccount(customer.getId(), ipAddress);
     }
 
