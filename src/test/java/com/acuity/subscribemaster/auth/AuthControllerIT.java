@@ -73,6 +73,12 @@ public class AuthControllerIT {
 
   private RSAPublicKey jwtPublicKey;
 
+  @Value("${app.login-lockout.max-attempts}")
+  private int maxLoginAttempts;
+
+  @Value("${app.login-lockout.duration-minutes}")
+  private int lockoutDurationMinutes;
+
   @Container
   static final PostgreSQLContainer postgres =
       new PostgreSQLContainer("postgres:16-alpine")
@@ -381,6 +387,91 @@ public class AuthControllerIT {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+  }
+
+  @Test
+  void loginWithMaxWrongPasswords_locksAccountAndPersistsLock() {
+    // Arrange
+    var email = "lockout.persist@example.com";
+    var rawPassword = "easyPassword!#123";
+    var wrongPassword = "wrongPassword!#123";
+
+    restTemplate.postForEntity(
+        "/api/v1/auth/register",
+        new RegistrationRequest(email, rawPassword),
+        RegistrationResponse.class);
+
+    // Act + Assert -- every failure below the threshold is a plain 401
+    for (int attempt = 1; attempt < maxLoginAttempts; attempt++) {
+      var response =
+          restTemplate.postForEntity(
+              "/api/v1/auth/login", new LoginRequest(email, wrongPassword), ApiError.class);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+      assertThat(response.getBody()).isNotNull();
+      assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+    }
+
+    // Act + Assert -- the failure that reaches the threshold locks the account
+    var lockingResponse =
+        restTemplate.postForEntity(
+            "/api/v1/auth/login", new LoginRequest(email, wrongPassword), ApiError.class);
+    assertThat(lockingResponse.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(lockingResponse.getBody()).isNotNull();
+    assertThat(lockingResponse.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
+
+    // Assert -- the lock was actually saved to the database, not rolled back with the exception
+    var lockedCustomer = customerRepo.findByEmail(email).orElseThrow();
+    assertThat(lockedCustomer.getFailedLoginCount()).isEqualTo(maxLoginAttempts);
+    assertThat(lockedCustomer.getLockedUntil())
+        .isNotNull()
+        .isCloseTo(
+            Instant.now().plus(lockoutDurationMinutes, ChronoUnit.MINUTES),
+            within(5, ChronoUnit.SECONDS));
+    assertThat(
+            auditLogRepo.findByActorIdAndAction(lockedCustomer.getId(), AuditAction.ACCOUNT_LOCKED))
+        .hasSize(1);
+
+    // Act + Assert -- while locked, even the correct password is refused
+    var correctPasswordResponse =
+        restTemplate.postForEntity(
+            "/api/v1/auth/login", new LoginRequest(email, rawPassword), ApiError.class);
+    assertThat(correctPasswordResponse.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(correctPasswordResponse.getBody()).isNotNull();
+    assertThat(correctPasswordResponse.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
+  }
+
+  @Test
+  void loginWithWrongPasswordAfterLockExpires_restartsFailedCountAtOne() {
+    // Arrange -- put the account in the state a real lock leaves behind once it runs out:
+    // the counter still at the threshold, lockedUntil just in the past
+    var email = "lockout.expired@example.com";
+    var wrongPassword = "wrongPassword!#123";
+
+    restTemplate.postForEntity(
+        "/api/v1/auth/register",
+        new RegistrationRequest(email, "easyPassword!#123"),
+        RegistrationResponse.class);
+
+    var customer = customerRepo.findByEmail(email).orElseThrow();
+    customer.setFailedLoginCount(maxLoginAttempts);
+    customer.setLockedUntil(Instant.now().minus(1, ChronoUnit.MINUTES));
+    customerRepo.saveAndFlush(customer);
+
+    // Act -- one wrong password after the lock has expired
+    var response =
+        restTemplate.postForEntity(
+            "/api/v1/auth/login", new LoginRequest(email, wrongPassword), ApiError.class);
+
+    // Assert -- treated as a first failure, not an immediate re-lock
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+
+    var savedCustomer = customerRepo.findByEmail(email).orElseThrow();
+    assertThat(savedCustomer.getFailedLoginCount()).isEqualTo(1);
+    assertThat(savedCustomer.getLockedUntil()).isNull();
+    assertThat(auditLogRepo.findByActorIdAndAction(customer.getId(), AuditAction.ACCOUNT_LOCKED))
+        .isEmpty();
   }
 
   @Test

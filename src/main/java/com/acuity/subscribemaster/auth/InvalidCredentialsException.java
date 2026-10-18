@@ -9,6 +9,6 @@ package com.acuity.subscribemaster.auth;
 public class InvalidCredentialsException extends RuntimeException {
 
   public InvalidCredentialsException() {
-    super("An account with this email address was not found");
+    super("Invalid email or password");
   }
 }
