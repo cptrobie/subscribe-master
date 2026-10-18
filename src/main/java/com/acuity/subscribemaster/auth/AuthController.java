@@ -1,5 +1,6 @@
 package com.acuity.subscribemaster.auth;
 
+import com.acuity.subscribemaster.auth.dto.EmailVerificationResponse;
 import com.acuity.subscribemaster.auth.dto.LoginRequest;
 import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
@@ -16,35 +17,43 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Unauthenticated public endpoints for gaining access to the system (FR-01: registration, FR-02:
- * login). Stays thin per NFR-01 -- all real logic lives in AuthService.
+ * login, FR-30: email verification). Stays thin per NFR-01 -- all real logic lives in {@link
+ * AuthService} and {@link EmailVerificationService}.
  */
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Authentication", description = "Account creation and login")
+@Tag(name = "Authentication", description = "Account creation, email verification and login")
 public class AuthController {
 
   private final AuthService authService;
+  private final EmailVerificationService verifyService;
 
-  public AuthController(AuthService authService) {
+  public AuthController(
+      AuthService authService, EmailVerificationService emailVerificationService) {
     this.authService = authService;
+    this.verifyService = emailVerificationService;
   }
 
-  // TODO(FR-30/FR-31): accept and honor an Idempotency-Key request header here --
-  // check idempotency_keys before re-running register()'s side effects, validate
-  // request_hash on key reuse, store the outcome after a successful first run (NFR-24).
+  // TODO(NFR-33): accept and honor an Idempotency-Key request header on register -- check
+  // idempotency_keys before re-running its side effects (customer row, verification email),
+  // validate request_hash on key reuse, store the outcome after a successful first run (NFR-24).
+  // Split out of FR-30 into its own issue.
 
   @Operation(
       summary = "Register a new customer account",
       description =
-          "Creates a new customer account with a hashed password (BCrypt, FR-03). "
-              + "The account is created immediately; email verification (FR-30) is not yet implemented.")
+          "Creates a customer account with a hashed password (FR-03) and emails a verification "
+              + "link (FR-30). Registration succeeds even if the email can't be sent; the "
+              + "account then stays unverified until a new link is requested (FR-40).")
   @ApiResponses({
     @ApiResponse(
         responseCode = "201",
@@ -73,9 +82,8 @@ public class AuthController {
   @Operation(
       summary = "Login to an account",
       description =
-          "Login to a previously registered account. Does not currently require a "
-              + "verified email, since FR-31's verification gate depends on FR-30, which is not "
-              + "yet implemented.")
+          "Login to a previously registered account. Does not yet require a verified email -- "
+              + "that gate is FR-31.")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -102,6 +110,38 @@ public class AuthController {
       @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
     var response =
         authService.login(request.email(), request.password(), httpRequest.getRemoteAddr());
-    return ResponseEntity.status(HttpStatus.OK).body(response);
+    return ResponseEntity.ok(response);
+  }
+
+  @Operation(
+      summary = "Verify an email address",
+      description =
+          "Confirms the email address from the link sent at registration (FR-30). A GET so the "
+              + "emailed link works on its own. Safe to repeat: opening an already-used link for "
+              + "an already-verified account returns 200 \"Email already verified.\", so link "
+              + "scanners opening it first don't break the customer's own click.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "Email verified, or already verified by an earlier click",
+        content = @Content(schema = @Schema(implementation = EmailVerificationResponse.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Invalid, expired or missing verification token",
+        content = @Content(schema = @Schema(implementation = ApiError.class)))
+  })
+  /**
+   * Confirms a customer's email address from the token in their verification link.
+   *
+   * <p><b>The token arrives in the URL query string.</b> Never log the request URL, the query
+   * string or the {@code token} parameter here, and keep it out of any request-logging filter added
+   * later -- a logged token is a working verification link until it's used or expires. Only its
+   * hash is ever looked up ({@link EmailVerificationService}).
+   */
+  @GetMapping(path = "/verify-email", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<EmailVerificationResponse> verifyEmail(
+      @RequestParam(name = "token") String token, HttpServletRequest httpRequest) {
+    var response = verifyService.verify(token, httpRequest.getRemoteAddr());
+    return ResponseEntity.ok(response);
   }
 }

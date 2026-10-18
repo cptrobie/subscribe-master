@@ -79,7 +79,10 @@ public class Customer {
     this.isActive = active;
   }
 
-  /** Marks the account verified (FR-31 will gate login on this; out of scope here). */
+  /**
+   * Marks the account verified. Called by {@code EmailVerificationService} when the customer
+   * confirms their verification link (FR-30); FR-31 will gate login on this flag.
+   */
   public void markEmailVerified() {
     this.isEmailVerified = true;
   }

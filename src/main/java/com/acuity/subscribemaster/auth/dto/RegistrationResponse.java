@@ -15,6 +15,11 @@ public record RegistrationResponse(
 
   public static RegistrationResponse accepted(
       UUID id, String email, boolean emailVerified, Instant createdAt) {
-    return new RegistrationResponse(id, email, emailVerified, createdAt, "Account created.");
+    return new RegistrationResponse(
+        id,
+        email,
+        emailVerified,
+        createdAt,
+        "Account created. Check your email to verify your address.");
   }
 }

@@ -9,20 +9,22 @@ import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.support.EmailMasker;
 import com.acuity.subscribemaster.support.JwtIssuer;
+import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Registration and login business logic (FR-01, FR-02): create the customer, hash the password
- * (FR-03), record a REGISTERED audit_logs entry on registration (NFR-17), and issue a signed JWT
- * (RS256) on successful login.
+ * (FR-03), record a REGISTERED audit_logs entry on registration (NFR-17), issue the email
+ * verification token (FR-30), and issue a signed JWT (RS256) on successful login.
  *
  * <p><b>JWT, not opaque DB-backed sessions.</b> The original implementation used opaque, hashed
  * session tokens (customer_sessions), inferred from that table's own inline schema comment without
@@ -38,10 +40,16 @@ import org.springframework.transaction.annotation.Transactional;
  * public key needs distributing to verifying modules. See {@link
  * com.acuity.subscribemaster.support.JwtIssuer} for the actual signing logic.
  *
- * <p>Email verification (FR-30) is not yet implemented, and neither is FR-31's
- * login-blocked-until-verified gate -- it genuinely can't be built yet: every customer's {@code
- * email_verified} is {@code false} with no way to ever flip it until FR-30 exists, so enforcing the
- * gate now would make login untestable, not just premature.
+ * <p><b>Email verification (FR-30).</b> Registration generates a random token, saves only its hash
+ * ({@link CustomerEmailVerificationToken}, expiring after {@code app.email-verification.token-ttl})
+ * and publishes a {@link CustomerRegisteredEvent} -- all inside the registration transaction, so
+ * the customer and token are saved together or not at all. The email itself is sent by {@link
+ * VerificationEmailListener} only after that transaction commits, and a failed send doesn't fail
+ * registration. Confirming the link is {@link EmailVerificationService}'s job, not this class's.
+ *
+ * <p>FR-31's login-blocked-until-verified gate is not yet enforced: {@link #login} still accepts an
+ * unverified account. Now that FR-30 can flip {@code email_verified}, the gate is buildable; it's
+ * tracked separately so FR-30 could ship on its own.
  *
  * <p><b>Credential errors are unified deliberately.</b> "Email not found" and "wrong password" both
  * throw the same {@link InvalidCredentialsException}, with the same message and HTTP status --
@@ -78,12 +86,12 @@ public class AuthService {
   private final CustomerRepository customerRepo;
   private final JwtIssuer jwtIssuer;
   private final PasswordEncoder pwdEncoder;
+  private final CustomerEmailVerificationTokenRepository emailVerifyTokenRepo;
+  private final EmailVerificationProperties emailVerifyProps;
+  private final ApplicationEventPublisher events;
   private final AuditLogService auditLogService;
   private final int maxLoginAttempts;
   private final int lockoutDurationMinutes;
-
-  // private final ApplicationEventPublisher events;
-  // private final RegistrationProperties properties;
 
   private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
@@ -91,12 +99,18 @@ public class AuthService {
       CustomerRepository customerRepository,
       JwtIssuer jwtIssuer,
       PasswordEncoder passwordEncoder,
+      CustomerEmailVerificationTokenRepository customerEmailVerificationTokenRepository,
+      EmailVerificationProperties emailVerificationProperties,
+      ApplicationEventPublisher eventPublisher,
       AuditLogService auditLogService,
       @Value("${app.login-lockout.max-attempts}") int maxLoginAttempts,
       @Value("${app.login-lockout.duration-minutes}") int lockoutDurationMinutes) {
     this.customerRepo = customerRepository;
     this.jwtIssuer = jwtIssuer;
     this.pwdEncoder = passwordEncoder;
+    this.emailVerifyTokenRepo = customerEmailVerificationTokenRepository;
+    this.emailVerifyProps = emailVerificationProperties;
+    this.events = eventPublisher;
     this.auditLogService = auditLogService;
     this.maxLoginAttempts = maxLoginAttempts;
     this.lockoutDurationMinutes = lockoutDurationMinutes;
@@ -129,8 +143,8 @@ public class AuthService {
     // TODO: a concurrent registration for the same email could still land between the
     // existsByEmail check above and this insert -- the DB's citext unique constraint would
     // catch it, but it would currently surface as a raw, unhandled exception rather than a
-    // clean UserAlreadyExistsException. Deliberately deferred -- revisit alongside NFR-24
-    // (idempotency), which would also help here.
+    // clean UserAlreadyExistsException. Deliberately deferred -- revisit alongside NFR-33
+    // (registration idempotency), which would also help here.
     var customer = customerRepo.saveAndFlush(new Customer(email, pwdEncoder.encode(password)));
 
     auditLogService.recordEvent(
@@ -140,18 +154,18 @@ public class AuthService {
         "auth",
         customer.getId(),
         ipAddress);
-    // TODO(FR-30): create a token and save to customer_email_verification_tokens, then send the
-    // verification email. Out of scope for FR-01.
-    /*
-    events.publishEvent(
-             new CustomerRegisteredEvent(
-                     customer.getId(),
-                     customer.getEmail(),
-                     verificationLink,
-                     expiresAt,
-                     command.ipAddress()));
 
-     */
+    var rawToken = Tokens.generate();
+    var emailVerifyToken =
+        new CustomerEmailVerificationToken(
+            customer.getId(),
+            Tokens.hash(rawToken),
+            Instant.now().plus(emailVerifyProps.tokenTtl()));
+
+    emailVerifyTokenRepo.save(emailVerifyToken);
+
+    events.publishEvent(
+        new CustomerRegisteredEvent(customer.getId(), customer.getEmail(), rawToken, ipAddress));
 
     logger.info("customer {} registered.", customer.getId());
 
