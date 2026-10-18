@@ -51,7 +51,6 @@ spring:
     # (classpath:db/migration, i.e. src/main/resources/db/migration/), so
     # they're picked up automatically and packaged into the built JAR.
 
-
   # The setting below is required for NoHandlerFoundException to
   # actually be thrown (and reach GlobalExceptionHandler) on an unmatched route.
   # Without add-mappings: false, Spring Boot's static-resource handler claims
@@ -61,12 +60,25 @@ spring:
     resources:
       add-mappings: false
 
+  # Default mail settings
+  mail:
+    host: localhost
+    port: 1025   # Mailpit
+
 app:
+  branding:
+    product-name: Subscribe Master
   jwt:
     access-token-duration-minutes: 15
   login-lockout:
     max-attempts: 5
     duration-minutes: 15
+  mail:
+    from-address: no-reply@localhost.test
+    from-name: ${app.branding.product-name}
+  email-verification:
+    link-base-url: http://localhost:8080/api/v1/auth/verify-email
+    token-ttl: PT24H
 
   payment:
     retry:

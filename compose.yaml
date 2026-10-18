@@ -40,6 +40,14 @@ services:
       timeout: 5s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: subscribe-master-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+
   # --- app service intentionally omitted for now ---
   # There's no Spring Boot application/Dockerfile to build yet at this stage
   # of Wave 0. Once the project exists (step 3 in the task order), add:
@@ -55,11 +63,17 @@ services:
   #       SPRING_PROFILES_ACTIVE: dev
   #       VAULT_ADDR: http://vault:8200
   #       VAULT_TOKEN: local-dev-root-token
+  #       SPRING_MAIL_HOST: mailpit
   #     ports:
   #       - "8080:8080"
   #
+  # Mailpit note for when this is enabled: no depends_on entry is needed for
+  # it -- the app only connects to SMTP when it actually sends an email, not
+  # at startup. But SPRING_MAIL_HOST must be "mailpit": inside Docker's
+  # network, localhost is the app container itself, not Mailpit.
+
   # Until then, `docker compose up` gives you a working local Postgres +
-  # Vault to develop and run Flyway migrations against.
+  # Vault + Mailpit to develop and run Flyway migrations against.
 
 volumes:
   postgres_data:
