@@ -24,6 +24,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
+/**
+ * Global exception handling (NFR-02): maps application and Spring MVC exceptions to an HTTP status
+ * and an {@link ApiError} body with a stable {@link ErrorCode}. Any exception without a specific
+ * handler falls through to {@link #handleUnexpected}, which logs it with its stack trace and
+ * returns a generic 500 message rather than the exception's own.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

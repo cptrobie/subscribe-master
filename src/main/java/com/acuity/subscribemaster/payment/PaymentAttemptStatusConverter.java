@@ -4,6 +4,10 @@ import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import java.util.Locale;
 
+/**
+ * Auto-applied JPA converter mapping {@link PaymentAttemptStatus} to {@code
+ * payment_attempts.status}, stored as the lowercase enum name ({@code succeeded}/{@code failed}).
+ */
 @Converter(autoApply = true)
 public class PaymentAttemptStatusConverter
     implements AttributeConverter<PaymentAttemptStatus, String> {

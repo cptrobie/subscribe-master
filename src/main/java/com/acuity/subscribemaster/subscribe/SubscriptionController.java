@@ -21,6 +21,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST endpoints for the authenticated customer's own subscriptions, under {@code
+ * /api/v1/subscribe}: create, update, get one, list, and the pause / resume / cancel status
+ * transitions (FR-07, FR-09). The customer is always the JWT subject, never a client-supplied id; a
+ * subscription belonging to another customer is reported as not found.
+ */
 @RestController
 @RequestMapping("/api/v1/subscribe")
 @Tag(name = "Subscription", description = "Subscription operations")

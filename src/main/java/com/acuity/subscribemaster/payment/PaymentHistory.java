@@ -10,6 +10,18 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * One billing-cycle payment obligation for a subscription (table {@code payment_history}, {@code
+ * V2}) -- the parent of its {@link PaymentAttempt}s and {@link Refund}s (FR-28, FR-29).
+ *
+ * <p>An immutable snapshot, not a live reference: {@code amount}, {@code base_currency_amount} and
+ * {@code exchange_rate_applied} record what was charged at payment time and must not be re-derived
+ * from the subscription or {@code exchange_rates} (ARCHITECTURE.md &sect;4.2). {@code
+ * attempt_count} (capped at 3, {@code V3}) and {@code last_attempted_at} ({@code V8}) are
+ * denormalized from {@code payment_attempts} for the retry logic (&sect;4.3). {@code version}
+ * ({@code V4}) is the optimistic-locking column (NFR-04, &sect;5.1). {@code subscription_id} and
+ * {@code payment_method_id} are plain UUIDs, not entity associations.
+ */
 @Entity
 @Table(name = "payment_history")
 public class PaymentHistory {

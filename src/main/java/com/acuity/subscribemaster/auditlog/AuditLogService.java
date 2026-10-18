@@ -7,6 +7,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Writes {@link AuditLog} entries (NFR-17) and logs a one-line summary of each. Callers are
+ * responsible for passing the correct {@link ActorType} and actor id, since nothing in the database
+ * enforces it (ARCHITECTURE.md &sect;6.1).
+ *
+ * <p>{@link #recordEvent} runs in its own transaction ({@code REQUIRES_NEW}), so the entry is
+ * committed independently of the caller's transaction and survives if that transaction later rolls
+ * back -- e.g. {@code REGISTRATION_REJECTED} and {@code ACCOUNT_LOCKED} are recorded just before
+ * {@code AuthService} throws.
+ */
 @Service
 public class AuditLogService {
   private final AuditLogRepository repository;

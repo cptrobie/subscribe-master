@@ -1,11 +1,10 @@
 package com.acuity.subscribemaster.auth;
 
 /**
- * A registration was attempted for an email that already has an account.
- *
- * <p>The message is deliberately generic (no email address) so it is safe to log and safe to return
- * — it does not confirm to an anonymous caller whether a given address is registered beyond the
- * HTTP status itself.
+ * A login failed because the email is not registered or the password is wrong. One exception for
+ * both, deliberately: distinguishing them would let a caller enumerate registered emails through
+ * the login endpoint (see {@link AuthService}). Mapped to a 401 by {@code GlobalExceptionHandler},
+ * which returns its own fixed "Invalid email or password" message, not this exception's.
  */
 public class InvalidCredentialsException extends RuntimeException {
 

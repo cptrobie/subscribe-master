@@ -7,6 +7,14 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
+/**
+ * A full or partial refund of a {@link PaymentHistory} payment (table {@code refunds}, {@code V3})
+ * -- FR-28, ARCHITECTURE.md &sect;4.4.
+ *
+ * <p>{@code amount} need not equal the original payment, and {@code reason} is mandatory free text.
+ * {@code stripe_refund_id} is the reconciliation reference to Stripe's refund (&sect;4.1). {@code
+ * payment_history_id} is a plain UUID, not a {@code @ManyToOne}.
+ */
 @Entity
 @Table(name = "refunds")
 public class Refund {

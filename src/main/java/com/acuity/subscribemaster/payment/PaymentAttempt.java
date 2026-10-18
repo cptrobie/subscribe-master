@@ -5,6 +5,15 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.UuidGenerator;
 
+/**
+ * One individual charge attempt against a {@link PaymentHistory} obligation (table {@code
+ * payment_attempts}, {@code V3}) -- FR-29, ARCHITECTURE.md &sect;4.3.
+ *
+ * <p>Each try gets its own row with its own {@code attempt_number} (1-3, unique per {@code
+ * payment_history_id}), Stripe payment intent id, outcome and {@code failure_reason}; the parent's
+ * {@code attempt_count} and {@code status} hold the cumulative state. {@code payment_history_id} is
+ * a plain UUID, not a {@code @ManyToOne}.
+ */
 @Entity
 @Table(
     name = "payment_attempts",

@@ -15,6 +15,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST endpoints under {@code /api/v1/payment}.
+ *
+ * <p>Only {@code GET /{id}} is implemented (delegates to {@link PaymentService#getPaymentById}).
+ * {@code POST /register} is a placeholder stub that currently returns {@code null}; making a
+ * payment is not yet wired up.
+ */
 @RestController
 @RequestMapping("/api/v1/payment")
 @Tag(name = "Payment", description = "Payment operations")
