@@ -1,12 +1,14 @@
 package com.acuity.subscribemaster.auth;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.acuity.subscribemaster.auth.dto.EmailVerificationResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.error.GlobalExceptionHandler;
@@ -23,6 +25,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 public class AuthControllerTest {
 
   private final AuthService authService = mock(AuthService.class);
+  private final EmailVerificationService verifyService = mock(EmailVerificationService.class);
 
   private MockMvc mvc;
 
@@ -31,7 +34,7 @@ public class AuthControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    AuthController controller = new AuthController(authService);
+    AuthController controller = new AuthController(authService, verifyService);
 
     mvc =
         MockMvcBuilders.standaloneSetup(controller)
@@ -56,7 +59,31 @@ public class AuthControllerTest {
         .andExpect(jsonPath("$.id").value(customerId.toString()))
         .andExpect(jsonPath("$.email").value("addme@example.com"))
         .andExpect(jsonPath("$.emailVerified").value(false))
-        .andExpect(jsonPath("$.message").value("Account created."));
+        .andExpect(
+            jsonPath("$.message")
+                .value("Account created. Check your email to verify your address."));
+  }
+
+  @Test
+  void verifyEmail_validToken_returnsOkVerified() throws Exception {
+    when(verifyService.verify(eq("the raw token"), anyString()))
+        .thenReturn(EmailVerificationResponse.verified());
+
+    mvc.perform(get("/api/v1/auth/verify-email").param("token", "the raw token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.emailVerified").value(true))
+        .andExpect(jsonPath("$.message").value("Email verified."));
+  }
+
+  @Test
+  void verifyEmail_alreadyVerified_returnsOkAlreadyVerified() throws Exception {
+    when(verifyService.verify(anyString(), anyString()))
+        .thenReturn(EmailVerificationResponse.alreadyVerified());
+
+    mvc.perform(get("/api/v1/auth/verify-email").param("token", "the raw token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.emailVerified").value(true))
+        .andExpect(jsonPath("$.message").value("Email already verified."));
   }
 
   @Test
@@ -109,5 +136,37 @@ public class AuthControllerTest {
         .andExpect(
             jsonPath("$.message")
                 .value("An unexpected error occurred. If it persists, contact support."));
+  }
+
+  @Test
+  void verifyEmail_invalidToken_returnsBadRequest() throws Exception {
+    when(verifyService.verify(anyString(), anyString()))
+        .thenThrow(new InvalidVerificationTokenException());
+
+    mvc.perform(get("/api/v1/auth/verify-email").param("token", "the raw token"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_VERIFICATION_TOKEN.name()))
+        .andExpect(jsonPath("$.message").value("This verification link is invalid."));
+  }
+
+  @Test
+  void verifyEmail_expiredToken_returnsBadRequest() throws Exception {
+    when(verifyService.verify(anyString(), anyString()))
+        .thenThrow(new VerificationTokenExpiredException());
+
+    mvc.perform(get("/api/v1/auth/verify-email").param("token", "the raw token"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(ErrorCode.VERIFICATION_TOKEN_EXPIRED.name()))
+        .andExpect(jsonPath("$.message").value("This verification link has expired."));
+  }
+
+  @Test
+  void verifyEmail_missingToken_returnsBadRequest() throws Exception {
+    mvc.perform(get("/api/v1/auth/verify-email"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(ErrorCode.MALFORMED_REQUEST.name()))
+        .andExpect(jsonPath("$.message").value("Missing required parameter 'token'"));
+
+    verifyNoInteractions(verifyService);
   }
 }

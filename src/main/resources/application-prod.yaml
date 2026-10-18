@@ -26,6 +26,14 @@ spring:
     # token is. If any of these env vars are missing, startup should fail
     # loudly rather than silently falling back to something insecure.
 
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+
   cloud:
     vault:
       host: ${VAULT_HOST}
@@ -43,3 +51,9 @@ logging:
   level:
     root: WARN
     org.springframework.vault: WARN
+
+app:
+  mail:
+    from-address: ${MAIL_FROM_ADDRESS}
+  email-verification:
+    link-base-url: ${VERIFICATION_LINK_BASE_URL}

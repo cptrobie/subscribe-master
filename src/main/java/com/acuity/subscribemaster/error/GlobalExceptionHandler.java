@@ -3,6 +3,8 @@ package com.acuity.subscribemaster.error;
 import com.acuity.subscribemaster.auth.AccountAlreadyExistsException;
 import com.acuity.subscribemaster.auth.AccountLockedException;
 import com.acuity.subscribemaster.auth.InvalidCredentialsException;
+import com.acuity.subscribemaster.auth.InvalidVerificationTokenException;
+import com.acuity.subscribemaster.auth.VerificationTokenExpiredException;
 import com.acuity.subscribemaster.idempotency.IdempotentReplayCorruptedException;
 import com.acuity.subscribemaster.subscribe.InvalidSubscriptionIdentityException;
 import com.acuity.subscribemaster.support.EntityNotFoundException;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -97,6 +100,20 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
   }
 
+  @ExceptionHandler(InvalidVerificationTokenException.class)
+  public ResponseEntity<ApiError> handleInvalidVerificationToken(
+      InvalidVerificationTokenException ex, HttpServletRequest request) {
+    return body(
+        HttpStatus.BAD_REQUEST, ErrorCode.INVALID_VERIFICATION_TOKEN, ex.getMessage(), request);
+  }
+
+  @ExceptionHandler(VerificationTokenExpiredException.class)
+  public ResponseEntity<ApiError> handleExpiredVerificationToken(
+      VerificationTokenExpiredException ex, HttpServletRequest request) {
+    return body(
+        HttpStatus.BAD_REQUEST, ErrorCode.VERIFICATION_TOKEN_EXPIRED, ex.getMessage(), request);
+  }
+
   @ExceptionHandler(AccountLockedException.class)
   public ResponseEntity<ApiError> handleLockedAccount(
       AccountLockedException ex, HttpServletRequest request) {
@@ -145,6 +162,16 @@ public class GlobalExceptionHandler {
         HttpStatus.BAD_REQUEST,
         ErrorCode.MALFORMED_REQUEST,
         "Invalid value for parameter '" + ex.getName() + "'",
+        request);
+  }
+
+  @ExceptionHandler(MissingServletRequestParameterException.class)
+  public ResponseEntity<ApiError> handleMissingParameter(
+      MissingServletRequestParameterException ex, HttpServletRequest request) {
+    return body(
+        HttpStatus.BAD_REQUEST,
+        ErrorCode.MALFORMED_REQUEST,
+        "Missing required parameter '" + ex.getParameterName() + "'",
         request);
   }
 

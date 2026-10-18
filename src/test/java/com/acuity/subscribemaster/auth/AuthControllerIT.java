@@ -6,25 +6,29 @@ import static org.assertj.core.api.Assertions.within;
 import com.acuity.subscribemaster.auditlog.ActorType;
 import com.acuity.subscribemaster.auditlog.AuditAction;
 import com.acuity.subscribemaster.auditlog.AuditLogRepository;
-import com.acuity.subscribemaster.auth.dto.LoginRequest;
-import com.acuity.subscribemaster.auth.dto.LoginResponse;
-import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
-import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
+import com.acuity.subscribemaster.auth.dto.*;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.error.ApiError;
 import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.support.PemKeys;
+import com.acuity.subscribemaster.support.Tokens;
+import com.icegreen.greenmail.junit5.GreenMailExtension;
+import com.icegreen.greenmail.util.ServerSetupTest;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.SignedJWT;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -84,10 +88,14 @@ public class AuthControllerIT {
           .withEnv("VAULT_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
           .waitingFor(Wait.forHttp("/v1/sys/health").forPort(8200).forStatusCode(200));
 
+  @RegisterExtension
+  static GreenMailExtension greenMail = new GreenMailExtension(ServerSetupTest.SMTP);
+
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private CustomerRepository customerRepo;
-  @Autowired private AuditLogRepository auditLogRepo;
+  @Autowired private CustomerEmailVerificationTokenRepository tokenRepo;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private AuditLogRepository auditLogRepo;
 
   @BeforeAll
   static void configureAndSeedVault() throws Exception {
@@ -159,6 +167,8 @@ public class AuthControllerIT {
   @DynamicPropertySource
   static void registerContainerProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.mail.host", () -> "localhost");
+    registry.add("spring.mail.port", () -> 3025);
   }
 
   @Test
@@ -187,6 +197,59 @@ public class AuthControllerIT {
     assertThat(auditEvents).hasSize(1);
     assertThat(auditEvents.get(0).getResource()).isEqualTo("auth");
     assertThat(auditEvents.get(0).getResourceId()).isEqualTo(savedCustomer.getId());
+  }
+
+  @Test
+  void register_thenVerifyLink_marksEmailVerifiedAndIsSafeToRepeat() throws Exception {
+    // Arrange -- register, which sends the verification email after commit
+    var email = "verify.roundtrip@example.com";
+    restTemplate.postForEntity(
+        "/api/v1/auth/register",
+        new RegistrationRequest(email, "easyPassword!#123"),
+        RegistrationResponse.class);
+    var customer = customerRepo.findByEmail(email).orElseThrow();
+
+    // The email arrived, to the right person, from the configured sender
+    MimeMessage[] received = greenMail.getReceivedMessages();
+    assertThat(received).hasSize(1);
+    var mail = received[0];
+    assertThat(mail.getAllRecipients()[0].toString()).isEqualTo(email);
+    assertThat(mail.getSubject()).contains("Subscribe Master");
+    var from = (InternetAddress) mail.getFrom()[0];
+    assertThat(from.getAddress()).isEqualTo("no-reply@localhost.test");
+    assertThat(from.getPersonal()).isEqualTo("Subscribe Master");
+
+    // Pull the raw token out of the link -- getContent() decodes the transfer encoding
+    var body = (String) mail.getContent();
+    var matcher = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher(body);
+    assertThat(matcher.find()).isTrue();
+    var rawToken = matcher.group(1);
+
+    // Act -- open the link
+    var first =
+        restTemplate.getForEntity(
+            "/api/v1/auth/verify-email?token={token}", EmailVerificationResponse.class, rawToken);
+
+    // Assert -- verified, and actually saved to the database (not just in memory)
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(first.getBody()).isEqualTo(EmailVerificationResponse.verified());
+    assertThat(customerRepo.findById(customer.getId()).orElseThrow().getIsEmailVerified()).isTrue();
+    assertThat(tokenRepo.findByTokenHash(Tokens.hash(rawToken)).orElseThrow().isUsed()).isTrue();
+    assertThat(
+            auditLogRepo.findByActorIdAndAction(
+                customer.getId(), AuditAction.EMAIL_VERIFICATION_SENT))
+        .hasSize(1);
+    assertThat(auditLogRepo.findByActorIdAndAction(customer.getId(), AuditAction.EMAIL_VERIFIED))
+        .hasSize(1);
+
+    // Act + Assert -- opening it again is harmless (the link-scanner case)
+    var second =
+        restTemplate.getForEntity(
+            "/api/v1/auth/verify-email?token={token}", EmailVerificationResponse.class, rawToken);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(second.getBody()).isEqualTo(EmailVerificationResponse.alreadyVerified());
+    assertThat(auditLogRepo.findByActorIdAndAction(customer.getId(), AuditAction.EMAIL_VERIFIED))
+        .hasSize(1);
   }
 
   @Test
@@ -334,5 +397,36 @@ public class AuthControllerIT {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+  }
+
+  @Test
+  void register_mailServerDown_stillCreatesAccountAndSkipsSentAudit() {
+    // Arrange -- take the SMTP server down, so the after-commit send fails
+    greenMail.stop();
+    var email = "mail.outage@example.com";
+
+    // Act
+    ResponseEntity<RegistrationResponse> response =
+        restTemplate.postForEntity(
+            "/api/v1/auth/register",
+            new RegistrationRequest(email, "easyPassword!#123"),
+            RegistrationResponse.class);
+
+    // Assert -- registration is unaffected by the mail failure (decision B)
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var customer = customerRepo.findByEmail(email).orElseThrow();
+    assertThat(customer.getIsEmailVerified()).isFalse();
+
+    // The token was still saved -- it committed with the customer, before the send was attempted
+    assertThat(tokenRepo.findAll())
+        .anyMatch(t -> t.getCustomerId().equals(customer.getId()) && !t.isUsed());
+
+    // But nothing claims the email went out
+    assertThat(auditLogRepo.findByActorIdAndAction(customer.getId(), AuditAction.REGISTERED))
+        .hasSize(1);
+    assertThat(
+            auditLogRepo.findByActorIdAndAction(
+                customer.getId(), AuditAction.EMAIL_VERIFICATION_SENT))
+        .isEmpty();
   }
 }

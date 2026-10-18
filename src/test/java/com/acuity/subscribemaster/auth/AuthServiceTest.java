@@ -11,6 +11,8 @@ import com.acuity.subscribemaster.auditlog.AuditLogService;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.support.JwtIssuer;
+import com.acuity.subscribemaster.support.Tokens;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -34,7 +37,13 @@ class AuthServiceTest {
   @Mock private CustomerRepository customerRepo;
   @Mock private JwtIssuer jwtIssuer;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private CustomerEmailVerificationTokenRepository emailVerifyTokenRepo;
   @Mock private AuditLogService auditLogService;
+  @Mock private ApplicationEventPublisher events;
+
+  private final EmailVerificationProperties emailVerifyProps =
+      new EmailVerificationProperties(
+          "http://localhost:8080/api/v1/auth/verify-email", Duration.ofHours(24));
 
   private AuthService authService;
 
@@ -45,6 +54,9 @@ class AuthServiceTest {
             customerRepo,
             jwtIssuer,
             passwordEncoder,
+            emailVerifyTokenRepo,
+            emailVerifyProps,
+            events,
             auditLogService,
             5, // maxLoginAttempts
             15); // lockoutDurationMinutes
@@ -89,6 +101,49 @@ class AuthServiceTest {
     verify(customerRepo, times(1)).existsByEmail(email);
   }
 
+  @Test
+  void successfulRegistration_savesHashedTokenAndPublishesEventWithRawToken() {
+    // Arrange
+    var email = "test@example.com";
+    var rawPassword = "easyPassword!#123";
+    var encodedPassword = "bCrypted_password";
+    var ipAddress = "192.168.0.1";
+    var customerId = UUID.randomUUID();
+    var createdAt = Instant.now();
+
+    var savedCustomer = new Customer(customerId, email, encodedPassword, false, true);
+    ReflectionTestUtils.setField(savedCustomer, "createdAt", createdAt);
+
+    when(customerRepo.existsByEmail(email)).thenReturn(false);
+    when(passwordEncoder.encode(rawPassword)).thenReturn(encodedPassword);
+    when(customerRepo.saveAndFlush(any(Customer.class))).thenReturn(savedCustomer);
+
+    // Act
+    authService.register(email, rawPassword, ipAddress);
+
+    // Assert -- capture what register() actually saved and published
+    var tokenCaptor = ArgumentCaptor.forClass(CustomerEmailVerificationToken.class);
+    verify(emailVerifyTokenRepo).save(tokenCaptor.capture());
+    var savedToken = tokenCaptor.getValue();
+
+    var eventCaptor = ArgumentCaptor.forClass(CustomerRegisteredEvent.class);
+    verify(events).publishEvent(eventCaptor.capture());
+    var event = eventCaptor.getValue();
+
+    // The event carries the real address and the raw token; only its hash was stored
+    assertThat(event.customerId()).isEqualTo(customerId);
+    assertThat(event.email()).isEqualTo(email);
+    assertThat(event.ipAddress()).isEqualTo(ipAddress);
+    assertThat(savedToken.getTokenHash())
+        .isEqualTo(Tokens.hash(event.rawToken()))
+        .isNotEqualTo(event.rawToken());
+
+    // The token belongs to the new customer and expires after the configured TTL
+    assertThat(savedToken.getCustomerId()).isEqualTo(customerId);
+    assertThat(savedToken.getExpiresAt())
+        .isCloseTo(Instant.now().plus(Duration.ofHours(24)), within(5, ChronoUnit.SECONDS));
+  }
+
   // Covers AuthService.duplicateEmailDetected -- the existsByEmail() check catching the
   // duplicate before any insert is attempted.
   @Test
@@ -114,6 +169,7 @@ class AuthServiceTest {
     verify(customerRepo, times(1)).existsByEmail(email);
     verify(customerRepo, never()).save(any());
     verify(customerRepo, never()).saveAndFlush(any());
+    verifyNoInteractions(emailVerifyTokenRepo, events);
 
     // Assert: rejection is audited against the existing account, not a new one
     verify(auditLogService, times(1))

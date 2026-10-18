@@ -6,7 +6,7 @@ Captures the design worked through for `FR-33`/`FR-34` (see `subscribe_master_re
 sequenceDiagram
     participant C as Customer
     participant A as AuthController
-    participant E as EmailSender
+    participant E as MessageService (email)
 
     C->>A: POST /login (email, password)
 

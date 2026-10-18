@@ -45,13 +45,21 @@ Subscribe Master consolidates a customer's paid subscriptions (Netflix, Spotify,
 
 **For ops/support:** "user says their reset link doesn't work" is answered by checking `used_at`/`expires_at` on the relevant token row, not by asking the customer to read the token back to you over the phone (you can't reverse the hash to verify it anyway).
 
-### 2.4 Email verification and the `EmailSender` abstraction
+### 2.4 Email verification and the `message` module
 
-Registration builds a small, genuinely reusable `EmailSender` (backed by Spring's `JavaMailSender`) rather than a throwaway one written just for verification emails. Wave 8's `FR-20` Strategy-pattern notification abstraction calls this same `EmailSender` as its email-channel implementation later — nothing built here gets discarded when Wave 8 arrives.
+Registration (`FR-30`) introduces a `message` module rather than a throwaway email helper written just for verification emails. Its public API is three types in the `message` package itself:
 
-**For developers:** don't build a second email-sending mechanism for anything else that needs to send email (payment reminders, 2FA codes) — extend or call `EmailSender`, the same way `FR-33`'s 2FA challenge will.
+- `MessageService` — the one interface callers inject: `send(OutboundMessage)`.
+- `MessageChannel` — the delivery channel (`EMAIL` today; `SMS` arrives with `FR-37`).
+- `OutboundMessage` — what to send: channel, recipient, subject, plain-text body.
 
-**Text messages follow the same rule.** `FR-37` adds an `SmsSender` (Twilio) with the same shape as `EmailSender`, and `FR-20`'s Strategy abstraction wraps both. Anything that sends a code or notification (2FA, phone verification, payment reminders) calls these senders and honors the customer's `preferred_contact_method` rather than building its own sending path — see `design-docs/contact_preferences_and_sms.md`. Email verification itself (`FR-30`) is unaffected by that preference.
+Everything else is internal: `DefaultMessageService` dispatches each message to the `ChannelSender` registered for its channel, and `EmailSender` (backed by Spring's `JavaMailSender`) is the email `ChannelSender`. This is `FR-20`'s Strategy pattern in miniature, built up front so callers never change: `FR-37` adds an `SmsSender` as another `ChannelSender`, and `FR-20`/`FR-39`'s channel routing and email fallback live in `DefaultMessageService`. *(This originally read "callers use `EmailSender` directly, `FR-20` wraps it later" — changed during `FR-30` so `auth` and every later caller depend on the interface from day one, rather than being migrated off `EmailSender` in Wave 8.)*
+
+**Dependencies point into `message`, never out of it.** The caller chooses the channel and supplies the recipient (email address or phone number); `message` never looks up a customer. Verification tokens, 2FA codes and phone-verification codes are identity state owned by `auth`, which calls `message` only to deliver them — so `auth → message`, with no cycle back.
+
+**Nothing brand- or environment-specific is hardcoded.** Sender address/name (`app.mail.*`), product name (`app.branding.*`) and the verification link's base URL (`app.email-verification.link-base-url`) all come from configuration, so a buyer can white-label a deployment without code changes. The link base URL in particular must never be derived from the incoming request's `Host` header — that header is client-controlled (host-header injection). Emails are plain text for now; see `design-docs/white_label_branding_and_multipart_email.md` for the branding scope and the later multipart (text + HTML) refactor, which stays entirely inside `message/email`.
+
+**For developers:** don't build a second sending mechanism for anything that needs to email or text a customer (payment reminders, 2FA codes, phone verification) — inject `MessageService`, never a sender directly. Anything that sends a code or notification honors the customer's `preferred_contact_method` by passing the matching `MessageChannel` — see `design-docs/contact_preferences_and_sms.md`. Email verification itself (`FR-30`) is unaffected by that preference: it always uses `EMAIL`. Never log an `OutboundMessage`'s body — for verification it contains the raw token.
 
 **Why `FR-32` (unverified account cleanup) is scheduled in Wave 8, not here in Wave 1, despite being part of the same feature:** it needs a scheduled job, and `FR-21` (ShedLock, the mechanism that makes a scheduled job safe to run on more than one instance) isn't built until Wave 8. Building the cleanup job now would mean either leaving it unprotected against duplicate execution temporarily, or building ShedLock early just to support one job — both worse than deferring the job itself alongside its actual dependency.
 
@@ -219,7 +227,7 @@ Schema changes are delivered as versioned Flyway migrations (`V1`, `V1.1`, `V2`�
 
 ## 9. Secrets management: Vault, in every environment
 
-Application secrets — database credentials, the Stripe API key, the cbu.uz API key, the JWT RSA signing key pair, and anything else sensitive — are retrieved from HashiCorp Vault at runtime, not read from `.env` files or hardcoded config. This applies uniformly across every environment, including local development, rather than having local dev diverge from how staging/prod actually retrieve secrets. That consistency is the whole point: a secrets-handling bug that only shows up in production because local dev never exercised the real path is exactly the kind of gap this choice is meant to close.
+Application secrets — database credentials, SMTP credentials, the Stripe API key, the cbu.uz API key, the JWT RSA signing key pair, and anything else sensitive — are retrieved from HashiCorp Vault at runtime, not read from `.env` files or hardcoded config. This applies uniformly across every environment, including local development, rather than having local dev diverge from how staging/prod actually retrieve secrets. That consistency is the whole point: a secrets-handling bug that only shows up in production because local dev never exercised the real path is exactly the kind of gap this choice is meant to close.
 
 **On the JWT signing algorithm (RS256, asymmetric, not HS256/HMAC):** chosen specifically ahead of a planned future modulith migration to multiple independently-deployable builds. Under HMAC, every module that needs to *verify* a token would need the same shared secret that's *also* capable of signing forged tokens — a real trust/blast-radius problem once more than one deployable unit exists. Under RSA, only the public key needs distributing to verifying modules; the private signing key stays confined to whichever module actually issues tokens. See `AuthService`'s class Javadoc for the fuller history of the JWT pivot itself (this project originally used opaque, DB-backed session tokens before discovering `task.pdf`'s literal requirement).
 
@@ -229,6 +237,8 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 - **Seal status** — a sealed Vault means the application can't retrieve any secrets and will fail to start or fail to refresh a credential mid-run. This should page immediately, not wait for a downstream symptom.
 - **Token/lease expiry** — if the application authenticates via a method with a limited-lifetime token or lease (e.g. AppRole), track renewal failures separately from generic connection errors, since the failure mode looks identical to Vault being unreachable but the fix is different (renew/re-authenticate vs. Vault itself being down).
 - **Audit log** — Vault's own audit logging (distinct from this application's `audit_logs` table) records every secret access; review it as part of standard security posture, not just incident response.
+
+**SMTP credentials (`FR-30`) are a prod-only secret.** Local dev sends through Mailpit (`compose.yaml`), which needs no authentication, so nothing is seeded for it locally. In prod, `spring.mail.username` and `spring.mail.password` live in Vault at `secret/subscribe-master`, alongside the datasource credentials; the non-secret mail settings (`MAIL_HOST`, `MAIL_FROM_ADDRESS`, `VERIFICATION_LINK_BASE_URL`) are environment variables in `application-prod.yaml` with no fallback default, so a missing one fails startup rather than sending mail from, or links to, the wrong place.
 
 **Not modeled in the schema, deliberately:** as with `shedlock`, there's nothing to add to the database for this — secrets are never persisted in any table, by design. This is a pure infrastructure/configuration concern (see `subscribe_master_requirements.md`, NFR-20).
 
@@ -242,6 +252,8 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 - [ ] Never join `payment_history` back to `customer_subscriptions.amount` or live `exchange_rates` to "recompute" a historical value — the snapshot columns are already final.
 - [ ] Let `OptimisticLockException` (or equivalent) on `customer_subscriptions` and `payment_history` writes propagate to `GlobalExceptionHandler` (409); don't swallow it or let it 500. Background writers must handle it explicitly.
 - [ ] Never log or persist a raw session/reset/verification/refresh token — only hashes.
+- [ ] Send email/SMS only through `MessageService` (§2.4) — never inject `EmailSender`/`JavaMailSender` directly, and never log an `OutboundMessage`'s body.
+- [ ] Never hardcode a product name, sender address or host in customer-facing text or links — read them from `app.branding.*`/`app.mail.*`/config, and never build a link from the request's `Host` header (§2.4).
 - [ ] Gate staff features by permission (`role_permissions` lookup), never by hardcoded `role.name` checks.
 - [ ] Write every payment attempt to `payment_attempts`, even failed ones — don't skip failure rows.
 - [ ] Get the proration formula for partial refunds reviewed before implementing — the schema doesn't validate it.
@@ -249,7 +261,7 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 - [ ] Never edit an already-deployed Flyway migration — add a new one.
 - [ ] When adding a new subscription provider, insert into `subscription_providers` — don't hardcode provider names in application code.
 - [ ] Never commit a Vault token or read a secret from `.env` "just for local dev convenience" — local dev uses Vault the same way staging/prod do.
-- [ ] Any new POST endpoint with a real side effect (creates data, sends an email, eventually charges a card) accepts an `Idempotency-Key` header and checks `idempotency_keys` (`V7`) before re-running that side effect — this is what distinguishes a genuine client retry from a truly new request, and it's what will prevent `FR-30` from sending a duplicate verification email or `FR-12` (Wave 6) from double-charging a card on a network-drop-and-retry.
+- [ ] Any new POST endpoint with a real side effect (creates data, sends an email, eventually charges a card) accepts an `Idempotency-Key` header and checks `idempotency_keys` (`V7`) before re-running that side effect — this is what distinguishes a genuine client retry from a truly new request, and it's what will prevent registration from sending a duplicate verification email (`NFR-33`) or `FR-12` (Wave 6) from double-charging a card on a network-drop-and-retry.
 
 ---
 
@@ -265,6 +277,7 @@ Application secrets — database credentials, the Stripe API key, the cbu.uz API
 - **Role/permission access reviews:** query `role_permissions` joined to `staff_users` on a routine schedule (not just during incidents) as part of standard access governance.
 - **Refund reason consistency:** `refunds.reason` is free text; watch for drift into inconsistent values over time if application code isn't disciplined about using a fixed set of reason strings.
 - **Flyway deployment state:** check `flyway_schema_history` after any failed or interrupted deployment before assuming an environment is current.
+- **Verification emails failing to send (`FR-30`):** registration still succeeds when the email can't be sent, so a mail outage is silent to customers until they notice no email arrived. Watch for `verification email failed for customer …` warnings from `VerificationEmailListener` (the cause chain carries the real SMTP error), and for new customers with a `registered` but no `email_verification_sent` entry in `audit_logs` — see `COMMON_QUERIES.md` §4.
 - **Vault sealed, or a token/lease renewal failing:** page immediately for a sealed Vault (the application can't retrieve secrets at all); track renewal failures separately from generic connectivity errors, since the fix differs from "Vault is unreachable."
 
 ---

@@ -1,4 +1,4 @@
-package com.acuity.subscribemaster.notifyLog;
+package com.acuity.subscribemaster.notifylog;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,6 +9,15 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
+/**
+ * A record of a customer-facing notification sent for a subscription (table {@code
+ * notification_log}, {@code V4}). Append-only (NFR-07). The partial unique index {@code
+ * uq_notification_log_daily_dedup} stops the same notification type going to the same subscription
+ * twice in one UTC day (ARCHITECTURE.md &sect;6.3).
+ *
+ * <p>Known gap: there is no no-arg constructor, which JPA needs to load rows -- harmless while
+ * nothing reads the table, tracked under FR-20's notes.
+ */
 @Entity
 @Table(name = "notification_log")
 public class NotificationLog {
@@ -36,6 +45,8 @@ public class NotificationLog {
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
+
+  public NotificationLog() {}
 
   public NotificationLog(
       UUID subscriptionId,

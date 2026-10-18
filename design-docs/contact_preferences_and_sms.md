@@ -100,7 +100,7 @@ Related changes the new behavior forces:
 ## Payment notifications (`FR-19`/`FR-20`)
 
 - Delivery honors `preferred_contact_method` at send time: `TEXT` uses
-  `SmsSender`, otherwise `EmailSender`. These are subscription-scoped, so they stay
+  `MessageChannel.SMS`, otherwise `MessageChannel.EMAIL`, sent through `MessageService`. These are subscription-scoped, so they stay
   in `notification_log` with `channel = 'sms'`/`'email'` — the channel actually used.
 - Same fallback as 2FA: Twilio failure falls back to email; the log records the
   channel that really delivered.
@@ -112,9 +112,11 @@ Related changes the new behavior forces:
   but it ties verification state to Twilio and its limits differ from `FR-33`'s
   designed 3-attempt/15-minute-lockout semantics. Keeping codes app-owned lets both
   channels share one code-table pattern and keeps the sender swappable.
-- `SmsSender` mirrors `EmailSender`'s shape so `FR-20`'s Strategy abstraction wraps
-  both without rework (same principle as `ARCHITECTURE.md` §2.4: don't build a
-  second mechanism, extend the existing one).
+- `SmsSender` implements the `message` module's internal `ChannelSender` interface,
+  beside `EmailSender`, so `DefaultMessageService` routes to it once
+  `MessageChannel.SMS` exists — no caller changes (`ARCHITECTURE.md` §2.4: don't
+  build a second mechanism, extend the existing one). *(Originally "mirrors
+  `EmailSender`'s shape"; the interface came from `FR-30`.)*
 - **Credentials (account SID, auth token, sender number) live in Vault**
   (`NFR-20`), never in committed yaml.
 - **Tests never send real SMS**: unit tests mock `SmsSender`; integration tests
@@ -133,7 +135,7 @@ Related changes the new behavior forces:
 ## Impact on existing requirements
 
 - **`FR-33`**: "email OTP" becomes "OTP on the preferred channel" (`FR-39` owns
-  the change). Its blocker on `FR-30`'s `EmailSender` remains.
+  the change). Its former blocker on `FR-30`'s email-sending path is resolved.
 - **`FR-34`**: unchanged — still only the toggle.
 - **`FR-19`/`FR-20`**: `FR-20` grows S → M (channel routing and the SMS strategy).
 - **`login_2fa_sequence.md`** and **`ARCHITECTURE.md` §2.4**: amended to point here.
@@ -147,7 +149,7 @@ The set is split across two waves by dependency, not placed in one.
   schema is cheaper than two. On its own it lets a customer store a number but
   keep email selected; text becomes selectable only once `FR-38` verifies it.
 - **Wave 8: `FR-37` → `FR-38` → `FR-39`**, then `FR-19`'s routing, after `FR-20`.
-  `FR-37` is the sibling of `EmailSender`/`FR-20`'s abstraction and `FR-19` is its
+  `FR-37` is the sibling of `EmailSender` behind `FR-20`'s abstraction and `FR-19` is its
   consumer, so they belong together. `FR-33`/`FR-34` ship email-only in Wave 2 as
   originally designed, and `FR-39` later amends `FR-33`.
 - **Why not all in Wave 2:** Wave 2 is "Authorization extensions" and gates Wave
@@ -155,7 +157,7 @@ The set is split across two waves by dependency, not placed in one.
   gate for features nothing downstream of Wave 2 needs.
 - **Pull-forward option:** `FR-37`–`FR-39` have no dependency on Wave 3 or Wave 6.
   If text-message 2FA is wanted sooner, build them right after `FR-33` (which
-  still needs Wave 1's deferred `FR-30`).
+  no longer waits on `FR-30`, which is complete).
 
 Effect on wave totals: Wave 2 gains ~12h; Wave 8 gains ~48h plus the ~8h `FR-20`
 revision.
