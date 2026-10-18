@@ -31,8 +31,8 @@ cross-cutting gap affecting every staff-differentiated feature already in
 the backlog, most concretely `FR-28` (partial refunds, Wave 7) — `billing_admin`
 "can issue refunds" per `ARCHITECTURE.md`'s role description, but that
 means nothing until this mechanism exists. `FR-28`'s backlog entry should
-carry an explicit "blocked on `FR-06`" note, the same way `FR-33` already
-notes its own block on `FR-30`.
+carry an explicit "blocked on `FR-06`" note, the same way `FR-33` noted its
+block on `FR-30` (since resolved).
 
 ## DECIDED: permission-based checks, not hardcoded role checks
 
@@ -80,7 +80,7 @@ one-day addition.
 ## Scheduling
 
 Per the project's actual current sequencing (Wave 3 in progress, Wave 1 not
-yet 100% closed — `FR-30`/`FR-31` deliberately deferred — Wave 2 bypassed
+yet 100% closed — `FR-31` still open, `FR-30` since completed — Wave 2 bypassed
 in the meantime): the intended order is finish Wave 3, close out Wave 1,
 *then* Wave 2, with `FR-35` built immediately after `FR-06` — deliberately
 chosen as the first real consumer of this mechanism, since it's low-stakes

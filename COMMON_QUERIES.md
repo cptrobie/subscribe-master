@@ -202,6 +202,31 @@ WHERE customer_id = $1
   AND expires_at > now();
 ```
 
+**Email verification status for one customer** (support: "my verification link doesn't work" — `ARCHITECTURE.md` §2.3). Tokens are hash-only, so this is answered from the rows, never by asking for the link:
+
+```sql
+SELECT c.email_verified, t.created_at, t.expires_at, t.used_at
+FROM customers c
+LEFT JOIN customer_email_verification_tokens t ON t.customer_id = c.id
+WHERE c.id = $1
+ORDER BY t.created_at DESC;
+```
+
+`used_at` set and `email_verified` true → already verified (a second click returns "already verified"). `used_at` null and `expires_at` past → the link expired. No token rows → the account predates `FR-30` or the row was removed.
+
+**Registrations whose verification email never went out** (`FR-30` returns 201 even when sending fails — see `ARCHITECTURE.md` §11):
+
+```sql
+SELECT r.actor_id AS customer_id, r.created_at AS registered_at
+FROM audit_logs r
+WHERE r.action = 'registered'
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_logs s
+    WHERE s.action = 'email_verification_sent' AND s.actor_id = r.actor_id
+  )
+ORDER BY r.created_at DESC;
+```
+
 **Expired tokens ready for cleanup** (housekeeping job — run periodically, not ad hoc):
 
 ```sql

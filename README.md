@@ -21,7 +21,7 @@ This project started from a take-home assignment brief and has since grown into 
 |---|---|---|
 | **Java 21** | Building/running the application | |
 | **Maven** | Build tool | |
-| **Docker Desktop** | Local Postgres + Vault | Required now — see Getting Started |
+| **Docker Desktop** | Local Postgres + Vault + Mailpit | Required now — see Getting Started |
 | **IntelliJ IDEA** | Development | Recommended, not required |
 | **Flyway CLI** | Validating migrations independently of the app | Recommended — lets you run `flyway migrate` against local Postgres before the app exists |
 | **pgAdmin 4** | Inspecting the database | Optional, but useful alongside Flyway's own output |
@@ -40,7 +40,7 @@ This project started from a take-home assignment brief and has since grown into 
    ```
    docker compose up -d
    ```
-   This starts Postgres (`localhost:5432`) and Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `compose.yaml` for why dev mode is safe to hardcode locally but nowhere else).
+   This starts Postgres (`localhost:5432`), Vault in dev mode (`localhost:8200`, root token: `local-dev-root-token` — see `compose.yaml` for why dev mode is safe to hardcode locally but nowhere else), and Mailpit, a local mail catcher (SMTP on `localhost:1025`, inbox UI at `http://localhost:8025`). Every email the app sends locally — e.g. `FR-30`'s verification link — lands in Mailpit's inbox instead of a real mailbox.
 3. **Run the database migrations:**
    ```
       flyway -url=jdbc:postgresql://localhost:5432/subscribe_master \
@@ -48,7 +48,7 @@ This project started from a take-home assignment brief and has since grown into 
           -locations=filesystem:src/main/resources/db/migration \
           migrate
    ```
-   This applies every migration in `src/main/resources/db/migration/` in order (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`, `V7`) and seeds the roles/permissions and subscription provider catalog.
+   This applies every migration in `src/main/resources/db/migration/` in order (`V1`, `V1.1`, `V2`–`V4`, `V6`–`V11`, then the repeatable `R__seed_subscription_provider_catalog`) and seeds the roles/permissions and subscription provider catalog.
 4. **Inspect the result** in pgAdmin 4, or `psql`, to confirm the schema and seed data landed as expected.
 5. **Seed Vault with the database credentials** the app will read at startup. Either method works — the CLI, if installed:
 
@@ -68,8 +68,10 @@ This project started from a take-home assignment brief and has since grown into 
      jwt.private-key=@src/main/resources/local-dev-keys/jwt-private.pem \
      jwt.public-key=@src/main/resources/local-dev-keys/jwt-public.pem
    ```
+
+   **No SMTP credentials are needed locally** — Mailpit accepts mail without authentication. Production is different: its SMTP credentials live in Vault under the same path, as `spring.mail.username` and `spring.mail.password` (see `ARCHITECTURE.md` §9).
  
-6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same two key/value pairs.
+6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same four key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
 7. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
@@ -85,10 +87,15 @@ This project started from a take-home assignment brief and has since grown into 
 ├── src/test/resources/test-jwt-keys/    # Dedicated test-only JWT key pair -- committed (disposable fixture, never a real credential)
 ├── scripts/                             # One-time and recurring project-management scripts (see each subfolder)
 ├── design-docs/                         # Design docs ahead of formal requirements (sequence/flow diagrams, key decisions)
+│   ├── contact_preferences_and_sms.md
 │   ├── login_2fa_sequence.md
-│   └── subscription_status_transitions.md
+│   ├── payment_retry_and_dunning.md
+│   ├── provider_catalog_management.md
+│   ├── staff_authorization_design.md
+│   ├── subscription_status_transitions.md
+│   └── white_label_branding_and_multipart_email.md
 ├── subscribe_master_erd.drawio          # Entity-relationship diagram (open in draw.io / app.diagrams.net)
-├── compose.yaml                         # Local Postgres + Vault (dev mode)
+├── compose.yaml                         # Local Postgres + Vault (dev mode) + Mailpit
 ├── ARCHITECTURE.md                      # Design decisions, dev/ops guidance
 ├── subscribe_master_requirements.md     # Functional/non-functional requirements, with schema coverage status
 ├── IMPLEMENTATION_BACKLOG.md            # GitHub issue backlog, wave-based prioritization, sizing
@@ -108,6 +115,11 @@ This project started from a take-home assignment brief and has since grown into 
 | `subscribe_master_erd.drawio` | The entity-relationship diagram, with a legend explaining the color-coded domain sections |
 | `design-docs/login_2fa_sequence.md` | Sequence diagram and key decisions for the login/2FA design |
 | `design-docs/subscription_status_transitions.md` | Flowchart and key decisions for subscription status transitions and payment-date impact |
+| `design-docs/contact_preferences_and_sms.md` | Phone number, preferred contact method, phone verification and SMS (Twilio) — `FR-36`–`FR-39` |
+| `design-docs/payment_retry_and_dunning.md` | Payment retry scheduling, backoff and dunning |
+| `design-docs/provider_catalog_management.md` | Staff-managed subscription provider catalog |
+| `design-docs/staff_authorization_design.md` | Staff authentication and permission-based authorization |
+| `design-docs/white_label_branding_and_multipart_email.md` | Draft: per-deployment white-label branding, and the future plain-text → multipart (text + HTML) email refactor |
 
 
 ---
