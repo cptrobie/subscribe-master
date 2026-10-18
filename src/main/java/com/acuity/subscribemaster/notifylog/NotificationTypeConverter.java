@@ -1,9 +1,13 @@
-package com.acuity.subscribemaster.notifyLog;
+package com.acuity.subscribemaster.notifylog;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import java.util.Locale;
 
+/**
+ * Maps {@link NotificationType} to and from the lowercase string stored in {@code
+ * notification_log.notification_type}.
+ */
 @Converter(autoApply = true)
 public class NotificationTypeConverter implements AttributeConverter<NotificationType, String> {
 
