@@ -17,7 +17,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Sends the verification email for a new registration (FR-30), reacting to {@link
- * CustomerRegisteredEvent}.
+ * CustomerRegisteredEvent}, and audits whether the send succeeded or failed (NFR-34).
  *
  * <p><b>Runs after the registration transaction commits</b> ({@code AFTER_COMMIT}), so an email is
  * only ever sent for a customer and token that were actually saved -- a rolled-back registration
@@ -27,15 +27,19 @@ import org.springframework.web.util.UriComponentsBuilder;
  * only fires for events published inside a transaction, which {@code AuthService.register()} is.
  *
  * <p><b>A delivery failure doesn't fail registration.</b> {@link MessageDeliveryException} is
- * caught and logged, and registration still returns 201 -- the account exists, and recovery is
- * FR-40's resend (or FR-32's cleanup until that exists). Nothing else is caught: an {@link
- * IllegalStateException} from {@code MessageService} means a misconfiguration (no sender for the
- * channel) and must surface, even though it reaches the client as a 500 after the customer has
+ * caught, logged and audited, and registration still returns 201 -- the account exists, and
+ * recovery is FR-40's resend (or FR-32's cleanup until that exists). Nothing else is caught: an
+ * {@link IllegalStateException} from {@code MessageService} means a misconfiguration (no sender for
+ * the channel) and must surface, even though it reaches the client as a 500 after the customer has
  * already been saved.
  *
  * <p>{@code EMAIL_VERIFICATION_SENT} is audited only after a successful send, so {@code audit_logs}
- * records emails that actually went out. The link's base URL, product name and validity window all
- * come from config ({@link EmailVerificationProperties}, {@link BrandingProperties}); the window is
+ * records emails that actually went out. A caught delivery failure records {@code
+ * EMAIL_VERIFICATION_SEND_FAILED} instead, attributed the same way, so a failed send can be told
+ * apart from one not yet attempted. The SMTP cause stays in the log warning only, since {@code
+ * audit_logs} has no detail column; the warning is logged before the audit write, so the cause
+ * survives even if that write fails. The link's base URL, product name and validity window all come
+ * from config ({@link EmailVerificationProperties}, {@link BrandingProperties}); the window is
  * stated in whole hours, so a sub-hour {@code token-ttl} would read as "0 hours".
  */
 @Component
@@ -90,6 +94,13 @@ public class VerificationEmailListener {
           event.ipAddress());
     } catch (MessageDeliveryException e) {
       logger.warn("verification email failed for customer {}", event.customerId(), e);
+      auditLogService.recordEvent(
+          ActorType.CUSTOMER,
+          event.customerId(),
+          AuditAction.EMAIL_VERIFICATION_SEND_FAILED,
+          "auth",
+          event.customerId(),
+          event.ipAddress());
     }
   }
 }
