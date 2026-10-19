@@ -340,17 +340,22 @@ public class AuthControllerIT {
     var email = "login.roundtrip@example.com";
     var rawPassword = "easyPassword!#123";
 
-    restTemplate.postForEntity(
-        "/api/v1/auth/register",
-        new RegistrationRequest(email, rawPassword),
-        RegistrationResponse.class);
+    var regResponse =
+        restTemplate.postForEntity(
+            "/api/v1/auth/register",
+            new RegistrationRequest(email, rawPassword),
+            RegistrationResponse.class);
 
-    var response =
+    var customer = customerRepo.findByEmail(regResponse.getBody().email()).orElseThrow();
+    customer.markEmailVerified();
+    customerRepo.saveAndFlush(customer);
+
+    var logResponse =
         restTemplate.postForEntity(
             "/api/v1/auth/login", new LoginRequest(email, rawPassword), LoginResponse.class);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    var body = response.getBody();
+    assertThat(logResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var body = logResponse.getBody();
     assertThat(body).isNotNull();
     assertThat(body.token()).isNotBlank();
     assertThat(body.expiresAt()).isNotNull().isAfter(Instant.now());
@@ -438,6 +443,53 @@ public class AuthControllerIT {
     assertThat(correctPasswordResponse.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     assertThat(correctPasswordResponse.getBody()).isNotNull();
     assertThat(correctPasswordResponse.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
+  }
+
+  @Test
+  void
+      loginBeforeEmailVerified_returnsForbiddenAndPersistsCounterReset_thenSucceedsAfterVerifying() {
+    // Arrange
+    var email = "unverified.persist@example.com";
+    var rawPassword = "easyPassword!#123";
+    var wrongPassword = "wrongPassword!#123";
+
+    restTemplate.postForEntity(
+        "/api/v1/auth/register",
+        new RegistrationRequest(email, rawPassword),
+        RegistrationResponse.class);
+
+    // Act + Assert -- every failure below the threshold is a plain 401
+    for (int attempt = 1; attempt < maxLoginAttempts; attempt++) {
+      var response =
+          restTemplate.postForEntity(
+              "/api/v1/auth/login", new LoginRequest(email, wrongPassword), ApiError.class);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+      assertThat(response.getBody()).isNotNull();
+      assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+    }
+
+    // Act + Assert -- login using correct password however, email has NOT been verified
+    var unverifiedResponse =
+        restTemplate.postForEntity(
+            "/api/v1/auth/login", new LoginRequest(email, rawPassword), ApiError.class);
+    assertThat(unverifiedResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(unverifiedResponse.getBody()).isNotNull();
+    assertThat(unverifiedResponse.getBody().code()).isEqualTo(ErrorCode.EMAIL_NOT_VERIFIED.name());
+
+    // Assert + Arrange
+    var resetCustomer = customerRepo.findByEmail(email).orElseThrow();
+    assertThat(resetCustomer.getFailedLoginCount()).isEqualTo(0);
+    assertThat(resetCustomer.getLockedUntil()).isNull();
+
+    resetCustomer.markEmailVerified(); // verified directly
+    customerRepo.saveAndFlush(resetCustomer);
+
+    // Act + Assert a successful login
+    var successfulResponse =
+        restTemplate.postForEntity(
+            "/api/v1/auth/login", new LoginRequest(email, rawPassword), LoginResponse.class);
+    assertThat(successfulResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(successfulResponse.getBody().token()).isNotBlank();
   }
 
   @Test

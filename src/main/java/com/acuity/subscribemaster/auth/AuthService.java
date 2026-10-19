@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Registration and login business logic (FR-01, FR-02): create the customer, hash the password
  * (FR-03), record a REGISTERED audit_logs entry on registration (NFR-17), issue the email
- * verification token (FR-30), and issue a signed JWT (RS256) on successful login.
+ * verification token (FR-30), and issue a signed JWT (RS256) on successful login -- only to a
+ * verified account (FR-31).
  *
  * <p><b>JWT, not opaque DB-backed sessions.</b> The original implementation used opaque, hashed
  * session tokens (customer_sessions), inferred from that table's own inline schema comment without
@@ -47,9 +48,13 @@ import org.springframework.transaction.annotation.Transactional;
  * VerificationEmailListener} only after that transaction commits, and a failed send doesn't fail
  * registration. Confirming the link is {@link EmailVerificationService}'s job, not this class's.
  *
- * <p>FR-31's login-blocked-until-verified gate is not yet enforced: {@link #login} still accepts an
- * unverified account. Now that FR-30 can flip {@code email_verified}, the gate is buildable; it's
- * tracked separately so FR-30 could ship on its own.
+ * <p><b>Login is blocked until the email is verified (FR-31).</b> An unverified account with the
+ * correct password gets a distinct {@link EmailNotVerifiedException} (403), so a genuine user knows
+ * to check their email rather than assume their password is wrong. The check runs only after the
+ * password has been verified -- a wrong password still gets the generic {@link
+ * InvalidCredentialsException} -- so it reveals nothing to anyone who doesn't already know the
+ * password. It also runs after the failed-attempt counter is reset: a correct password proves the
+ * customer, so a user waiting on their verification email isn't left one typo from a lockout.
  *
  * <p><b>Credential errors are unified deliberately.</b> "Email not found" and "wrong password" both
  * throw the same {@link InvalidCredentialsException}, with the same message and HTTP status --
@@ -75,11 +80,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Failure state survives the exception.</b> {@link #login} records a failed attempt (and, on
  * the threshold failure, the lock itself) and then throws, so it's marked {@code noRollbackFor}
  * both exceptions -- otherwise Spring's default rollback on unchecked exceptions discards the
- * counter and lock every time, and the account never locks. The ACCOUNT_LOCKED audit entry is
- * unaffected either way, since {@link AuditLogService} writes in its own REQUIRES_NEW transaction;
- * that's what hid the original bug. An expired lock is cleared, with the counter reset to zero,
- * before the password is checked, so the first wrong password after a lock runs out counts as
- * attempt one rather than re-locking the account immediately.
+ * counter and lock every time, and the account never locks. {@link EmailNotVerifiedException} is
+ * listed too, for the same reason: without it, the counter reset that precedes it is rolled back
+ * with the exception. The ACCOUNT_LOCKED audit entry is unaffected either way, since {@link
+ * AuditLogService} writes in its own REQUIRES_NEW transaction; that's what hid the original bug. An
+ * expired lock is cleared, with the counter reset to zero, before the password is checked, so the
+ * first wrong password after a lock runs out counts as attempt one rather than re-locking the
+ * account immediately.
  *
  * <p><b>Known, deliberately deferred gap:</b> nonexistent-email login attempts get no rate-limiting
  * or audit logging at all -- there's no customer row to attach a counter to. A real fix needs
@@ -185,7 +192,12 @@ public class AuthService {
         customer.getCreatedAt());
   }
 
-  @Transactional(noRollbackFor = {InvalidCredentialsException.class, AccountLockedException.class})
+  @Transactional(
+      noRollbackFor = {
+        InvalidCredentialsException.class,
+        AccountLockedException.class,
+        EmailNotVerifiedException.class
+      })
   public LoginResponse login(String email, String password, String ipAddress) {
     var maskedEmail = EmailMasker.mask(email);
 
@@ -193,6 +205,7 @@ public class AuthService {
 
     // 1. Check login credential's validity
     var customer = customerRepo.findByEmail(email).orElseThrow(this::invalidCredentials);
+    var customerId = customer.getId();
 
     // 2. Reject if locked; reset an expired lock
     var now = Instant.now();
@@ -200,12 +213,12 @@ public class AuthService {
 
     if (lockedUntil != null) {
       if (lockedUntil.isAfter(now)) {
-        logger.warn("Customer {}: account is locked", customer.getId());
+        logger.warn("Customer {}: account is locked", customerId);
         throw new AccountLockedException();
       }
       customer.setFailedLoginCount(0);
       customer.setLockedUntil(null);
-      logger.info("Customer {}: expired lock cleared", customer.getId());
+      logger.info("Customer {}: expired lock cleared", customerId);
     }
 
     // 3. Verify the password & set the failedLoginCounter if not verified
@@ -217,20 +230,26 @@ public class AuthService {
         throw invalidCredentials();
       }
       customer.setLockedUntil(now.plus(lockoutDurationMinutes, ChronoUnit.MINUTES));
-      throw lockAccount(customer.getId(), ipAddress);
+      throw lockAccount(customerId, ipAddress);
     }
 
     // 4. If successful, clear brute-force counters
     customer.setFailedLoginCount(0);
     customer.setLockedUntil(null);
 
-    // 5. Issue a signed JWT -- self-verifying, nothing to persist
-    var issuedToken = jwtIssuer.issue(customer.getId());
+    // 5. Check if the account has been verified before proceeding
+    if (!customer.getIsEmailVerified()) {
+      logger.warn("Customer {}: login refused, email not verified", customerId);
+      throw new EmailNotVerifiedException();
+    }
 
-    // 6. Build and return the response with the token in the message body
-    logger.info("customer {} login successful.", customer.getId());
+    // 6. Issue a signed JWT -- self-verifying, nothing to persist
+    var issuedToken = jwtIssuer.issue(customerId);
+
+    // 7. Build and return the response with the token in the message body
+    logger.info("customer {} login successful.", customerId);
     return LoginResponse.accepted(
-        customer.getId(),
+        customerId,
         customer.getEmail(),
         customer.getIsEmailVerified(),
         issuedToken.token(),

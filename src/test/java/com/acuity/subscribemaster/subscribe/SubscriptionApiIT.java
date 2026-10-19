@@ -92,6 +92,8 @@ class SubscriptionApiIT {
         "/api/v1/auth/register",
         new RegistrationRequest(email, PASSWORD),
         RegistrationResponse.class);
+    // To log in, the email needs to be verified
+    jdbc.update("UPDATE customers SET email_verified = true WHERE email = ?", email);
     var login =
         restTemplate
             .postForEntity(
