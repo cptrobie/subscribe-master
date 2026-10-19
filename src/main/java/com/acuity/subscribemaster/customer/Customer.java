@@ -81,7 +81,7 @@ public class Customer {
 
   /**
    * Marks the account verified. Called by {@code EmailVerificationService} when the customer
-   * confirms their verification link (FR-30); FR-31 will gate login on this flag.
+   * confirms their verification link (FR-30); login is refused until it's set (FR-31).
    */
   public void markEmailVerified() {
     this.isEmailVerified = true;

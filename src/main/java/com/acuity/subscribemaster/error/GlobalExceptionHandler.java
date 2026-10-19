@@ -1,10 +1,6 @@
 package com.acuity.subscribemaster.error;
 
-import com.acuity.subscribemaster.auth.AccountAlreadyExistsException;
-import com.acuity.subscribemaster.auth.AccountLockedException;
-import com.acuity.subscribemaster.auth.InvalidCredentialsException;
-import com.acuity.subscribemaster.auth.InvalidVerificationTokenException;
-import com.acuity.subscribemaster.auth.VerificationTokenExpiredException;
+import com.acuity.subscribemaster.auth.*;
 import com.acuity.subscribemaster.idempotency.IdempotentReplayCorruptedException;
 import com.acuity.subscribemaster.subscribe.InvalidSubscriptionIdentityException;
 import com.acuity.subscribemaster.support.EntityNotFoundException;
@@ -104,6 +100,18 @@ public class GlobalExceptionHandler {
             "Invalid email or password",
             request.getRequestURI());
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+  }
+
+  @ExceptionHandler(EmailNotVerifiedException.class)
+  public ResponseEntity<ApiError> handleUnverifiedAccount(
+      EmailNotVerifiedException ex, HttpServletRequest request) {
+    ApiError body =
+        ApiError.of(
+            HttpStatus.FORBIDDEN,
+            ErrorCode.EMAIL_NOT_VERIFIED,
+            "Email address not verified",
+            request.getRequestURI());
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
   }
 
   @ExceptionHandler(InvalidVerificationTokenException.class)

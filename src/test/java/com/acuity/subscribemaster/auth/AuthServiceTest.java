@@ -232,7 +232,7 @@ class AuthServiceTest {
     // Customer has no constructor/setter for createdAt -- it's Hibernate-managed
     // via @CreationTimestamp -- so reflection is the only way to simulate a
     // persisted row's real timestamp here.
-    var loggedInCustomer = new Customer(customerId, email, encodedPassword, false, true);
+    var loggedInCustomer = new Customer(customerId, email, encodedPassword, true, true);
 
     when(customerRepo.findByEmail(email)).thenReturn(Optional.of(loggedInCustomer));
     when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
@@ -385,7 +385,7 @@ class AuthServiceTest {
     var customerId = UUID.randomUUID();
     var lockedExpireTime = Instant.now().minus(30L, ChronoUnit.SECONDS); // "some" time in the past
 
-    var retryCustomer = new Customer(customerId, email, encodedPassword, false, true);
+    var retryCustomer = new Customer(customerId, email, encodedPassword, true, true);
     ReflectionTestUtils.setField(retryCustomer, "lockedUntil", lockedExpireTime);
     var issuedToken =
         new JwtIssuer.IssuedToken("fake.jwt.token", Instant.now().plus(15L, ChronoUnit.MINUTES));
@@ -411,6 +411,9 @@ class AuthServiceTest {
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
 
+    // Deliberately unverified: a wrong password must still be a plain 401, never the
+    // FR-31 "email not verified" 403 -- otherwise the 403 would reveal the account exists
+    // and is unverified to someone who doesn't know the password.
     var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
     registeredCustomer.setFailedLoginCount(5); // the max-attempts value from setUp
     registeredCustomer.setLockedUntil(Instant.now().minus(30L, ChronoUnit.SECONDS));
@@ -426,6 +429,35 @@ class AuthServiceTest {
     assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(1);
     assertThat(registeredCustomer.getLockedUntil()).isNull();
 
+    verifyNoInteractions(auditLogService);
+  }
+
+  @Test
+  void unverifiedCustomerCorrectPassword_throwsEmailNotVerifiedAndResetsFailedCount() {
+    // Arrange
+    var customerId = UUID.randomUUID();
+    var email = "test@example.com";
+    var rawPassword = "easyPassword123";
+    var encodedPassword = "bCrypted_password";
+    var ipAddress = "192.168.0.1";
+    var failedLoginCountThresholdValue = 5;
+
+    var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
+    registeredCustomer.setFailedLoginCount(failedLoginCountThresholdValue - 1);
+
+    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
+    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
+
+    // Act & Assert
+    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
+        .isInstanceOf(EmailNotVerifiedException.class);
+
+    // provided password was correct so the failed loginCount reset
+    // however, exception was still thrown on lack of email verification
+    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(0);
+    assertThat(registeredCustomer.getLockedUntil()).isNull();
+
+    verifyNoInteractions(jwtIssuer);
     verifyNoInteractions(auditLogService);
   }
 }

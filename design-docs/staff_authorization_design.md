@@ -79,11 +79,11 @@ one-day addition.
 
 ## Scheduling
 
-Per the project's actual current sequencing (Wave 3 in progress, Wave 1 not
-yet 100% closed — `FR-31` still open, `FR-30` since completed — Wave 2 bypassed
-in the meantime): the intended order is finish Wave 3, close out Wave 1,
-*then* Wave 2, with `FR-35` built immediately after `FR-06` — deliberately
-chosen as the first real consumer of this mechanism, since it's low-stakes
+Per the project's actual current sequencing (Wave 3 complete, Wave 1 not
+yet 100% closed — `FR-30` and `FR-31` since completed, `NFR-33` and `FR-40`
+still open — Wave 2 bypassed in the meantime): the intended order is close
+out Wave 1, *then* Wave 2, with `FR-35` built immediately after `FR-06` —
+deliberately chosen as the first real consumer of this mechanism, since it's low-stakes
 (catalog metadata, no financial risk) compared to `FR-28` being the first
 thing to exercise brand-new staff-auth infrastructure. See
 `provider_catalog_management.md` for that design in full.

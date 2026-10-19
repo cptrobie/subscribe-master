@@ -222,7 +222,7 @@ Example of a paused wave with an optional resumption note:
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
-**FR-30 is complete; FR-31, NFR-33 and FR-40 remain open.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — was done before Wave 3 started, and FR-30 (email verification) was picked back up after Wave 3 closed. Two pieces were split out of FR-30 during implementation to keep it reviewable: registration idempotency (`NFR-33`) and resending the verification email (`FR-40`). FR-31 (the login gate) is now buildable, since FR-30 can set `email_verified`. This note stays until the wave closes.
+**FR-30 and FR-31 are complete; NFR-33 and FR-40 remain open.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — was done before Wave 3 started, and FR-30 (email verification) was picked back up after Wave 3 closed, followed by FR-31 (login blocked until verified). Two pieces were split out of FR-30 during implementation to keep it reviewable: registration idempotency (`NFR-33`) and resending the verification email (`FR-40`) — the latter now more pressing, since an unverified customer whose email never arrived can no longer log in. This note stays until the wave closes.
 
 - `[FR-01] User registration endpoint (/api/v1/auth/register)` — **[S]**
 - `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
@@ -231,7 +231,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-30] Email verification on registration (send verification link, confirm via endpoint)` — **[L]**
 - `[FR-31] Login blocked until email verified` — **[S]**
 - `[NFR-33] Idempotency-Key support on registration (first NFR-24 implementation, reusable)` — **[M]** — split out of `FR-30`; builds the reusable idempotency service `FR-12` (Wave 6) will also use. See `NFR-33`'s notes in `subscribe_master_requirements.md`.
-- `[FR-40] Resend verification email, optionally to a corrected address (unverified accounts only)` — **[M]** — split out of `FR-30`; depends on `FR-30`, most valuable once `FR-31` blocks unverified logins. Unauthenticated, so it requires the current email + password; invalidates earlier tokens, rate-limited per account. See `FR-40`'s notes in `subscribe_master_requirements.md`.
+- `[FR-40] Resend verification email, optionally to a corrected address (unverified accounts only)` — **[M]** — split out of `FR-30`; depends on `FR-30`; more pressing now that `FR-31` blocks unverified logins. Unauthenticated, so it requires the current email + password; invalidates earlier tokens, rate-limited per account. See `FR-40`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-02] Global exception handling` — **[S]** — introduce as soon as the first real endpoints exist, not later
 
 ## Wave 2 — Authorization extensions

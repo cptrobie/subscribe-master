@@ -50,10 +50,7 @@ public class AuthController {
 
   @Operation(
       summary = "Register a new customer account",
-      description =
-          "Creates a customer account with a hashed password (FR-03) and emails a verification "
-              + "link (FR-30). Registration succeeds even if the email can't be sent; the "
-              + "account then stays unverified until a new link is requested (FR-40).")
+      description = "Creates a customer account and emails a link to verify the email address.")
   @ApiResponses({
     @ApiResponse(
         responseCode = "201",
@@ -82,8 +79,8 @@ public class AuthController {
   @Operation(
       summary = "Login to an account",
       description =
-          "Login to a previously registered account. Does not yet require a verified email -- "
-              + "that gate is FR-31.")
+          "Login to a previously registered account. The account's email address must be "
+              + "verified first; an unverified account is refused with 403.")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
@@ -96,6 +93,10 @@ public class AuthController {
     @ApiResponse(
         responseCode = "401",
         description = "Invalid email or password",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "403",
+        description = "Correct credentials, but the account's email address has not been verified",
         content = @Content(schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
         responseCode = "429",
@@ -116,10 +117,8 @@ public class AuthController {
   @Operation(
       summary = "Verify an email address",
       description =
-          "Confirms the email address from the link sent at registration (FR-30). A GET so the "
-              + "emailed link works on its own. Safe to repeat: opening an already-used link for "
-              + "an already-verified account returns 200 \"Email already verified.\", so link "
-              + "scanners opening it first don't break the customer's own click.")
+          "Confirms the email address from the link sent at registration. Safe to repeat: "
+              + "an already-used link returns 200 \"Email already verified.\"")
   @ApiResponses({
     @ApiResponse(
         responseCode = "200",
