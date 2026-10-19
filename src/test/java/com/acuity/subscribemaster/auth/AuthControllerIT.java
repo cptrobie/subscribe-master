@@ -543,7 +543,7 @@ public class AuthControllerIT {
   }
 
   @Test
-  void register_mailServerDown_stillCreatesAccountAndSkipsSentAudit() {
+  void register_mailServerDown_stillCreatesAccountAndAuditsSendFailure() {
     // Arrange -- take the SMTP server down, so the after-commit send fails
     greenMail.stop();
     var email = "mail.outage@example.com";
@@ -564,12 +564,16 @@ public class AuthControllerIT {
     assertThat(tokenRepo.findAll())
         .anyMatch(t -> t.getCustomerId().equals(customer.getId()) && !t.isUsed());
 
-    // But nothing claims the email went out
+    // Nothing claims the email went out, but the failed send is recorded
     assertThat(auditLogRepo.findByActorIdAndAction(customer.getId(), AuditAction.REGISTERED))
         .hasSize(1);
     assertThat(
             auditLogRepo.findByActorIdAndAction(
                 customer.getId(), AuditAction.EMAIL_VERIFICATION_SENT))
         .isEmpty();
+    assertThat(
+            auditLogRepo.findByActorIdAndAction(
+                customer.getId(), AuditAction.EMAIL_VERIFICATION_SEND_FAILED))
+        .hasSize(1);
   }
 }

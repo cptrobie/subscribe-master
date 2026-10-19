@@ -74,11 +74,13 @@ class VerificationEmailListenerTest {
   }
 
   @Test
-  void onCustomerRegistered_deliveryFails_swallowsExceptionAndSkipsAudit() {
+  void onCustomerRegistered_deliveryFails_swallowsExceptionAndAuditsSendFailure() {
     // Arrange
     var customerId = UUID.randomUUID();
+    var ipAddress = "192.168.0.1";
+
     var registeredEvent =
-        new CustomerRegisteredEvent(customerId, "test@example.com", "aRawToken123", "192.168.0.1");
+        new CustomerRegisteredEvent(customerId, "test@example.com", "aRawToken123", ipAddress);
 
     doThrow(
             new MessageDeliveryException(
@@ -90,8 +92,15 @@ class VerificationEmailListenerTest {
     assertThatCode(() -> emailListener.onCustomerRegistered(registeredEvent))
         .doesNotThrowAnyException();
 
-    // Assert -- a send was attempted, but nothing was audited
+    // Assert -- a send was attempted and was audited
     verify(messageService, times(1)).send(any());
-    verifyNoInteractions(auditLogService);
+    verify(auditLogService, times(1))
+        .recordEvent(
+            ActorType.CUSTOMER,
+            customerId,
+            AuditAction.EMAIL_VERIFICATION_SEND_FAILED,
+            "auth",
+            customerId,
+            ipAddress);
   }
 }
