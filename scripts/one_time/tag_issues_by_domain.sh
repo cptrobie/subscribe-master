@@ -53,14 +53,30 @@ declare -a ISSUES=(
   "NFR-17 Audit logging|domain:auditlog"
   "NFR-18 Distributed|domain:auditlog"
 
+  # Wave 1 auth issues, tagged ahead of NFR-26 by where their code lives
+  # today (the auth package). If NFR-26 moves a boundary, swap the label.
+  "FR-01 User registration|domain:auth"
+  "FR-02 User login|domain:auth"
+  "FR-03 Password hashing|domain:auth"
+  "FR-30 Email verification|domain:auth"
+  "FR-31 Login blocked|domain:auth"
+  "FR-40 Resend verification|domain:auth"
+  "NFR-34 Audit a failed verification|domain:auth"
+
+  # Cross-cutting: a requirement whose code spans more than one business
+  # domain is domain:platform; one that stays inside a single domain gets
+  # that domain.
+  "NFR-02 Global exception|domain:platform"
+  "NFR-04 Optimistic locking|domain:platform"
+  "NFR-33 Idempotency-Key|domain:platform"
+
   # TODO (NFR-26 must decide these first):
-  # FR-01/02/03/04/05/06/30/31/32 -- auth vs. customer boundary
+  # FR-04/05/06/32 -- auth vs. customer boundary (FR-04's per-user
+  #   isolation spans customer, subscriptions and more)
   # FR-32's session cleanup half -- auth vs. customer (CustomerSession)
-  # NFR-02 (global exception handling) -- domain:shared vs. left untagged
   # NFR-08/09/12/13/14/15/16/19/20/21/22/23/24/25/06/10/11 -- cross-cutting
-  #   platform/governance NFRs; may deserve a domain:platform label of
-  #   their own rather than forcing them into a business domain, but
-  #   that's itself an NFR-26 decision, not one to make here.
+  #   platform/governance NFRs; domain:platform now exists (NFR-02, NFR-33)
+  #   but each still needs deciding rather than being tagged wholesale.
 )
 
 for entry in "${ISSUES[@]}"; do
