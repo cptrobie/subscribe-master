@@ -25,19 +25,19 @@ set -euo pipefail
 #     ./nfr-36_actuator_observability_add.sh
 # =====================================================================
 
-WAVE_NFR_36="wave-4"
-WAVE_NFR_37="wave-6"
-WAVE_NFR_38="wave-4"
+WAVE_NFR_36="wave-2"
+WAVE_NFR_37="wave-5"
+WAVE_NFR_38="wave-2"
 WAVE_NFR_39="wave-10"
 WAVE_NFR_40="wave-10"
 WAVE_NFR_41="wave-2"
 WAVE_NFR_42="wave-4"
 WAVE_NFR_43="wave-5"
-WAVE_NFR_44="wave-8"
+WAVE_NFR_44="wave-9"
 WAVE_FR_41="wave-7"
 WAVE_FR_42="wave-7"
 WAVE_FR_43="wave-10"
-WAVE_FR_44="wave-8"
+WAVE_FR_44="wave-9"
 
 for wave in "$WAVE_NFR_36" "$WAVE_NFR_37" "$WAVE_NFR_38" "$WAVE_NFR_39" \
   "$WAVE_NFR_40" "$WAVE_NFR_41" "$WAVE_NFR_42" "$WAVE_NFR_43" "$WAVE_NFR_44" \

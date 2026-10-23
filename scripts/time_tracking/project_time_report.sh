@@ -13,8 +13,12 @@ set -euo pipefail
 # Usage: ./project_time_report.sh
 # =====================================================================
 
+# Comfortably above the current issue count, matching check_domain_labels.sh;
+# raise it if the project ever gets near it, or the report silently drops issues.
+LIMIT=500
+
 echo "Fetching all issues..."
-gh issue list --state all --limit 100 --json number,title,labels,state > /tmp/all_issues_meta.json
+gh issue list --state all --limit "$LIMIT" --json number,title,labels,state > /tmp/all_issues_meta.json
 
 COUNT=$(python3 -c 'import json; print(len(json.load(open("/tmp/all_issues_meta.json"))))')
 echo "Found $COUNT issues. Fetching comments for each (this takes a moment)..."
@@ -82,6 +86,8 @@ for issue in issues_meta:
         continue
     comments = json.loads(out)["comments"]
 
+    # The latest "Estimate:" comment wins, so a revised estimate (e.g. a
+    # size change) can be recorded with a new comment.
     explicit_estimate_minutes = None
     for c in comments:
         m = re.search(r"Estimate:\s*~?\s*([^\n(]+)", c["body"], re.IGNORECASE)
@@ -89,7 +95,6 @@ for issue in issues_meta:
             parsed = parse_time(m.group(1))
             if parsed:
                 explicit_estimate_minutes = parsed
-                break
 
     actual_minutes = 0.0
     session_count = 0
