@@ -143,7 +143,8 @@ public class AuthControllerIT {
             "spring.datasource.username=subscribe_master",
             "spring.datasource.password=test_only_not_a_real_secret",
             "jwt.private-key=" + testPrivateKeyPem,
-            "jwt.public-key=" + testPublicKeyPem);
+            "jwt.public-key=" + testPublicKeyPem,
+            "app.idempotency.hmac-secret=test_only_not_a_real_secret");
     if (putResult.getExitCode() != 0) {
       throw new IllegalStateException("vault kv put failed: " + putResult.getStderr());
     }

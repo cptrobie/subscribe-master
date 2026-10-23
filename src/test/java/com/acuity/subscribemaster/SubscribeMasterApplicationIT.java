@@ -95,7 +95,8 @@ class SubscribeMasterApplicationIT {
             "-address=http://127.0.0.1:8200",
             "secret/subscribe-master",
             "spring.datasource.username=subscribe_master",
-            "spring.datasource.password=test_only_not_a_real_secret");
+            "spring.datasource.password=test_only_not_a_real_secret",
+            "app.idempotency.hmac-secret=test_only_not_a_real_secret");
     if (putResult.getExitCode() != 0) {
       throw new IllegalStateException("vault kv put failed: " + putResult.getStderr());
     }

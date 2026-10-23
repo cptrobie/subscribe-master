@@ -74,7 +74,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 
 **New REST endpoint / controller:**
 - [ ] Path is prefixed with a version segment (`/api/v1/...`), not bare (NFR-25)
-- [ ] **(POST with side effects only)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
+- [ ] **(POST with side effects a retry would repeat; login and state-machine transitions such as pause/cancel/resume are exempt, see NFR-24)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
 - [ ] Swagger/OpenAPI annotations present (NFR-09)
 - [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
 - [ ] Constructor injection only, no field injection (NFR-14)
@@ -267,6 +267,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-10] Pagination & filtering (Specification API, status/currency/price range)` — **[M]**
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
+- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscriptions)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`.
 
 ## Wave 4.5 — Module boundary hardening (modulith)
 
