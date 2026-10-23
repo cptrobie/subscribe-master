@@ -23,7 +23,8 @@ evaluation, tablet network path and Phase 3 shared library don't exist here).
 Its structure is kept for the Actuator and metrics part; its scope is rewritten
 for this application, and the parts that don't apply are listed under "Dropped
 from the source document". The tracing and log-management requirements were
-added in review. Once this document is adopted, it supersedes that one.
+added in review. This document supersedes it. Like `task.pdf`, the source
+breakdown is kept outside the repository.
 
 > **Adopted 2026-10-23.** The requirement rows and backlog entries in the
 > appendices have been added to `subscribe_master_requirements.md` and
@@ -636,8 +637,9 @@ not before.
      (running and monitoring the application).
 
    Labelled by what's managed, not by who calls the endpoint.
-5. **The source document.** Delete `phase1-observability-issues.md` once this one
-   is adopted, so there is one source of truth.
+5. **The source document — decided.** `phase1-observability-issues.md` stays
+   outside the repository, as `task.pdf` does; this document is the one source
+   of truth.
 6. **Default values.** Placeholders until you pick them:
 
    | Setting | Application | Audit |
