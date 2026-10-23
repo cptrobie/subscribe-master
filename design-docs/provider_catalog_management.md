@@ -13,8 +13,9 @@ source of truth going forward.
 ## Why this feature, and why now
 
 Chosen deliberately as the first thing built on top of `FR-06`'s new
-staff-permission infrastructure, ahead of `FR-05`/`FR-33`/`FR-34` (Wave 2's
-other items) and well ahead of `FR-28` (partial refunds, Wave 7). Rationale:
+staff-permission infrastructure, ahead of Wave 2's other items (`FR-05`,
+`NFR-36`, `NFR-38`; `FR-33`/`FR-34` moved to Wave 5.5 in the 2026-10-23
+rebalance) and well ahead of `FR-28` (partial refunds, Wave 7). Rationale:
 this is catalog metadata, not money — a much safer place to find bugs in
 brand-new permission-enforcement wiring than making financial refunds the
 first real test of it. **Scheduling: built immediately after `FR-06`**, not

@@ -173,6 +173,28 @@ gh issue close <N> --comment "Actual total: ~3h 30m across 5 sessions vs 4h esti
 
 ---
 
+## Wave sizing
+
+Every wave not yet complete targets **60–70h and is never over 80h**, using the size → hours mapping in "Time tracking process" above (S = 4h, M = 12h, L = 24h). A wave that would go over is split. New waves get a decimal number, as Wave 4.5 did, rather than renumbering, so existing `wave-N` labels and `project_time_report.sh` keep working.
+
+Rebalanced on 2026-10-23, when Wave 8 would otherwise have reached 128h. Estimates after the rebalance:
+
+| Wave | Hours | | Wave | Hours |
+|---|---|---|---|---|
+| 1 (in progress) | 92 | | 6 | 60 |
+| 2 | 68 | | 7 | 52 |
+| 4 | 36 | | 8 | 64 |
+| 4.5 | 68 | | 9 | 64 |
+| 5 | 56 | | 10 | 64 |
+| 5.5 | 76 | | 11 | 36 |
+
+A wave under 60h is fine when there's a reason:
+- **Wave 4:** it's the last stop before 4.5, so padding it only delays the modulith wave.
+- **Wave 6:** `NFR-21` (24h) is blocked until hosting is chosen.
+- **Wave 11:** it's verification, not build work.
+
+Wave 4's figure includes `NFR-35` (S). The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
+
 ## Wave status markers
 
 Each wave's heading carries a marker reflecting its actual current state — updated as work genuinely happens, never aspirationally set in advance:
@@ -181,7 +203,6 @@ Each wave's heading carries a marker reflecting its actual current state — upd
 - **🚧 In progress** — Real implementation work has begun (actual code, not just `FR`/`NFR` entries being written).
 - **⏸️ Paused** — Was in progress; work has stopped for now without being complete. Given this project is worked ad-hoc and part-time (see "Time tracking process" above), pausing is expected and normal, not a sign of falling behind schedule — there is no schedule to fall behind. A paused wave differs from "not started" in that real work is already invested; a brief note on roughly where things left off is worth adding if it'll help on resumption, though not mandatory for every pause.
 - **✅ Complete (verified via CI)** — Fully done and verified per this project's usual discipline (see Wave 0). Documentation existing for a wave's requirements is not sufficient for this marker on its own — only real, tested, working code earns it.
-
 Example of a paused wave with an optional resumption note:
 
 ```
@@ -238,20 +259,20 @@ Example of a paused wave with an optional resumption note:
 - `[NFR-34] Audit a failed verification email send at registration (EMAIL_VERIFICATION_SEND_FAILED)` — **[S]** — follow-on to `FR-30`: new `AuditAction`, a migration widening (`V11`) `audit_logs_action_check`, and the audit write in `VerificationEmailListener`'s failure path. Independent of `NFR-33` and `FR-40`. See `NFR-34`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-02] Global exception handling` — **[S]** — introduce as soon as the first real endpoints exist, not later
 
-## Wave 2 — Authorization extensions
+## Wave 2 — Staff authorization & platform baseline
 
-**Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first.
+**Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first. Also carries the platform pieces that must exist before Wave 4.5: audit `details` (`NFR-41`) and the Actuator baseline (`NFR-36`/`NFR-38`). See `actuator_observability.md`.
 
-**Temporarily bypassed after Wave 1, resumed before Wave 4.5/Wave 9.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record. **Also worth noting when Wave 2 resumes:** `FR-33` (added here after this note was first written) was blocked on `FR-30`'s email-sending path — that blocker is now resolved (`FR-30` delivered the `message` module's `MessageService`).
+**Temporarily bypassed Wave 2 while working on Wave 1, jumping to Wave 3. On Wave 3 completion, reverted back to Wave 1.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record.
 
-**Contact-preference set (`FR-36`–`FR-39`) is split across waves by dependency.** Only `FR-36` (no dependencies) is built here; `FR-37`–`FR-39` (SMS sender, phone verification, text 2FA) are in Wave 8 beside their sibling `FR-20` and their consumer `FR-19`. Order within this wave: `FR-06` → `FR-35` → `FR-36` → `FR-33` → `FR-34` → `FR-05`. Net effect on this wave: +~12h (`FR-36` only), so it still gates Wave 4.5/Wave 9 on RBAC work, not on SMS work. See `contact_preferences_and_sms.md`.
+**Rebalanced 2026-10-23** (see "Wave sizing"): two-factor authentication and the customer's contact preferences (`FR-36`, `FR-33`, `FR-34`) moved to Wave 5.5. `NFR-41`, `NFR-36` and `NFR-38` were added. Order within this wave: `NFR-41` → `FR-06` → `FR-35` → `NFR-36` → `NFR-38` → `FR-05`. About 68h.
 
+- `[NFR-41] audit_logs.details column (what changed, old → new)` — **[S]** — no dependencies; **first in this wave**, so `FR-06`'s and `FR-35`'s audit rows record old → new values from the start, and `NFR-28` (Wave 4.5) designs audit events with `details` once. Amends `NFR-17`. See `actuator_observability.md`.
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
 - `[FR-06] Role-based access control (staff roles/permissions)` — **[L]** *(revised from [M] — the original estimate covered "add role checks" in the abstract; the actual scope is staff login, staff JWT issuance, loading a staff user's permissions into the security context, and the Spring Security wiring to enforce them, none of which exist today. See `staff_authorization_design.md` for the full design, including why this is a cross-cutting blocker beyond just this wave — `FR-28` (Wave 7) also depends on it.)*
-- `[FR-35] Staff-managed subscription provider catalog (create/update/deactivate)` — **[M]** — **built immediately after `FR-06`**, before `FR-05`/`FR-33`/`FR-34` — deliberately chosen as the first real consumer of `FR-06`'s new permission infrastructure (low-stakes catalog metadata, not financial risk). **Not sourced from `task.pdf`.** See `provider_catalog_management.md` for the full design.
-- `[FR-36] Customer phone number and preferred contact method (email/text, default email), customer-updatable via API` — **[M]** — no dependencies. **Placed in Wave 2, before `FR-33`/`FR-34`:** `FR-34` also changes `customers` (`two_factor_enabled`), so making all the `customers` schema changes in one pass is cheaper than revisiting the table later. On its own it only lets a customer store a number and keep email selected — text becomes selectable once `FR-38` (Wave 8) verifies the number. Email verification (`FR-30`/`FR-31`) is unaffected. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md` for the full design.
-- `[FR-33] Two-factor authentication (email OTP)` — **[L]** — sends the OTP through `MessageService` (delivered by `FR-30`, no longer a blocker); see `login_2fa_sequence.md` for the full design. *(Ships email-only in this wave as originally designed. `FR-39` (Wave 8) later amends it to deliver the OTP on the customer's preferred channel, so this wave isn't held up by SMS work nothing downstream of Wave 2 needs.)*
-- `[FR-34] 2FA toggle (per-customer enable/disable)` — **[S]** — depends on `FR-33`
+- `[FR-35] Staff-managed subscription provider catalog (create/update/deactivate)` — **[M]** — **built immediately after `FR-06`**, before the rest of this wave — deliberately chosen as the first real consumer of `FR-06`'s new permission infrastructure (low-stakes catalog metadata, not financial risk). **Not sourced from `task.pdf`.** See `provider_catalog_management.md` for the full design.
+- `[NFR-36] Actuator baseline (management port, health + info only, separate security chain)` — **[M]** — no dependencies; after `FR-35`, so the actuator security chain is added beside `FR-06`'s staff chain in the same wave. Makes Spring Modulith's actuator endpoint available for Wave 4.5. See `actuator_observability.md`.
+- `[NFR-38] Build identity in /actuator/info` — **[S]** — depends on `NFR-36`.
 
 ## Wave 3 — Subscription management core ✅ Complete (verified via CI)
 
@@ -262,11 +283,14 @@ Example of a paused wave with an optional resumption note:
 - `[FR-09] Subscription status enum (ACTIVE/PAUSED/CANCELLED)` — **[M]** — includes transition validity and payment-date recalculation logic (task.pdf leaves this undesigned; see `subscription_status_transitions.md`)
 - `[NFR-04] Optimistic locking on customer_subscriptions and payment_history` — **[M]**
 
-## Wave 4 — Subscription management extensions
+## Wave 4 — Subscription management extensions & request tracing
+
+**`NFR-42` is staged here, not by theme:** it has to land before Wave 4.5. Tracing lets you watch cross-module calls become events during `NFR-28`, and dropping `trace_spans` first keeps `NFR-29` from moving it into a domain schema only for it to be dropped. See `actuator_observability.md`.
 
 - `[FR-10] Pagination & filtering (Specification API, status/currency/price range)` — **[M]**
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
+- `[NFR-42] Request tracing via Micrometer Tracing + Tempo; drop trace_spans` — **[M]** — depends on `NFR-36` (Wave 2); re-implements `NFR-18`, whose issue closes when this merges; brings up a minimal Grafana with only the Tempo data source (`NFR-32` adds the rest later).
 
 ## Wave 4.5 — Module boundary hardening (modulith)
 
@@ -289,9 +313,11 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-30] Domain metadata (\`domain:*\` labels) on GitHub issues` — **[S]**
 - `[NFR-31] ERD domain-partitioning update` — **[S]**
 
-## Wave 5 — Currency conversion
+**Note for `NFR-26`'s boundary design:** decide which module owns log management (`app_logs`, `log_settings`, `logger_level_overrides`, the archive job): `auditlog` or a new module. Deciding it here means `NFR-43` onward is built in the right place. See `actuator_observability.md`.
 
-**Rationale:** needed before payments can display/report meaningfully in the customer's base currency, but doesn't block subscription CRUD itself — can run in parallel with Wave 3/4 if you have the capacity.
+## Wave 5 — Currency conversion & application log storage
+
+**Rationale:** needed before payments can display/report meaningfully in the customer's base currency, but doesn't block subscription CRUD itself — can run in parallel with Wave 3/4 if you have the capacity. `NFR-43` and `NFR-37` were added in the 2026-10-23 rebalance. With them, errors are stored in a table and readiness probes exist before payments and deployment work arrive in Wave 6.
 
 - `[FR-13] Base currency tracking per customer` — **[S]**
 - `[FR-14] Real-time exchange rate integration (cbu.uz)` — **[M]**
@@ -299,6 +325,24 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-05] Exchange rate caching (performance angle — same implementation as FR-15, tracked separately since it's evaluated as its own criterion)` — **[S]**
 - `[FR-17] Rate date transparency` — **[S]**
 - `[FR-16] Resilience / fallback (Circuit Breaker) for the rate API` — **[M]**
+- `[NFR-43] Application logs to console, or console + app_logs (buffered, non-blocking)` — **[M]** — no dependencies; built in the module `NFR-26` chose for log management. Amends `NFR-23`. See `actuator_observability.md`.
+- `[NFR-37] Health model (liveness/readiness; Postgres + Vault, never mail)` — **[S]** — depends on `NFR-36` (Wave 2).
+
+## Wave 5.5 — Two-factor authentication & contact preferences
+
+*(Inserted 2026-10-23 by the wave rebalance. The `wave-5.5` label is created by `scripts/one_time/wave_rebalance_2026-10-23.sh`, which also moves these five issues here.)*
+
+**Rationale:** these items moved here so no wave exceeds 80h (see "Wave sizing"):
+- **From Wave 2:** two-factor authentication and contact preferences (`FR-36`, `FR-33`, `FR-34`).
+- **From Wave 8:** SMS sending and phone verification (`FR-37`, `FR-38`), using the pull-forward option Wave 8's note previously described.
+
+None of these are needed before Wave 4.5, which only waits on Wave 2's RBAC work. Building them after it puts them in the right modules from their first line. `FR-36` still comes before `FR-33`/`FR-34`, so all the `customers` schema changes happen in one pass. Order: `FR-36` → `FR-33` → `FR-34` → `FR-37` → `FR-38`. About 76h. See `contact_preferences_and_sms.md`.
+
+- `[FR-36] Customer phone number and preferred contact method (email/text, default email), customer-updatable via API` — **[M]** — no dependencies. **First in this wave, before `FR-33`/`FR-34`:** `FR-34` also changes `customers` (`two_factor_enabled`), so making all the `customers` schema changes in one pass is cheaper than revisiting the table later. On its own it only lets a customer store a number and keep email selected — text becomes selectable once `FR-38` (later in this wave) verifies the number. Email verification (`FR-30`/`FR-31`) is unaffected. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md` for the full design.
+- `[FR-33] Two-factor authentication (email OTP)` — **[L]** — sends the OTP through `MessageService` (delivered by `FR-30`); see `login_2fa_sequence.md` for the full design. *(Ships email-only first, as originally designed. `FR-39` (Wave 8) later amends it to deliver the OTP on the customer's preferred channel.)*
+- `[FR-34] 2FA toggle (per-customer enable/disable)` — **[S]** — depends on `FR-33`
+- `[FR-37] SMS sending via Twilio (SmsSender)` — **[M]** — a `ChannelSender` implementation beside `EmailSender` in the `message` module, so `MessageService` routes to it with no caller changes; needs a Twilio account and Vault-held credentials. **Not sourced from `task.pdf`.**
+- `[FR-38] Phone verification (SMS code) required before text can become the preferred contact method` — **[L]** — depends on `FR-36` and `FR-37`. **Not sourced from `task.pdf`.**
 
 ## Wave 6 — Payments core
 
@@ -308,46 +352,50 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-03] Transactional integrity on money-related operations` — **[M]**
 - `[NFR-21] CD pipeline: automated deployment to staging/prod` — **[L]** *(blocked — do not start until a hosting platform is chosen; see `subscribe_master_requirements.md` for the full prerequisite list. Placed here because this wave completes the "Waves 0–6" milestone, the first point where deploying something actually means anything.)*
 
-## Wave 7 — Payment resilience
+## Wave 7 — Payment resilience & runtime diagnostics
 
-**Rationale:** depends on Wave 6 existing — you need a working payment flow before you can retry or refund it.
+**Rationale:** depends on Wave 6 existing — you need a working payment flow before you can retry or refund it. The two staff diagnostics endpoints (`FR-41`, `FR-42`) were added in the 2026-10-23 rebalance. Changing log levels at runtime is most useful while debugging payment retries.
 
 - `[FR-29] Payment retry / dunning (up to 3 attempts)` — **[L]**
 - `[FR-28] Partial refund support` — **[M]** — also blocked on `FR-06`: `billing_admin`'s ability to issue refunds per `ARCHITECTURE.md`'s role description means nothing until staff permission enforcement actually exists; see `staff_authorization_design.md`
+- `[FR-41] Staff system status endpoint (read-only, RBAC)` — **[S]** — depends on `NFR-36`, `NFR-38` and `FR-06` (Wave 2); uses the existing `view_system_health` permission. See `actuator_observability.md`.
+- `[FR-42] Staff log-level management (persisted, audited)` — **[M]** — depends on `FR-06` and `NFR-41` (Wave 2). Each change is audited with the staff member as actor and old/new levels in `details`.
 
 ## Wave 8 — Scheduling & notifications
 
 **Rationale:** depends on Wave 3 (needs `next_payment_date` to check against) and benefits from Wave 6 existing (a real payment flow to warn about).
 
-**Contact-preference set, second half (`FR-37`–`FR-39`).** Order within this wave: `FR-20` (abstraction) → `FR-37` (`SmsSender`) → `FR-38` (phone verification) → `FR-39` (text 2FA, amending `FR-33` from Wave 2) → `FR-19` routing by `preferred_contact_method`. `FR-36` (Wave 2) must already exist. These three have no dependency on Wave 3 or Wave 6 and **can be pulled forward** (right after `FR-33`) if text-message 2FA is wanted sooner; they sit here because `FR-20` and `FR-19` do and nothing earlier needs them. Adds ~48h to this wave (plus +8h from `FR-20` growing S → M).
+**Contact-preference set, last piece (`FR-39`).** `FR-36`–`FR-38` are built in Wave 5.5 (`FR-37`/`FR-38` moved there from this wave in the 2026-10-23 rebalance, which also moved `NFR-44`/`FR-44` to Wave 9 instead of here). Order within this wave: `FR-21` → `FR-18` → `FR-32` → `FR-20` (abstraction, wrapping `FR-37`'s `SmsSender`) → `FR-39` (text 2FA, amending `FR-33`) → `FR-19` routing by `preferred_contact_method`. About 64h, including the +8h from `FR-20` growing S → M.
 
 - `[FR-18] Daily scheduled payment-due check` — **[S]**
 - `[FR-19] Payment-due warning notification (log/email/text)` — **[M]** — delivered on the customer's preferred contact method (`FR-36`); `notification_log.channel`'s CHECK must add `'sms'`
 - `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[M]** *(revised from [S] — now also wraps `FR-37`'s `SmsSender` as a second strategy and selects between email and text from `preferred_contact_method`, with an email fallback on Twilio failure. See `contact_preferences_and_sms.md`.)*
-- `[FR-37] SMS sending via Twilio (SmsSender)` — **[M]** — a `ChannelSender` implementation beside `EmailSender` in the `message` module, so `MessageService` routes to it with no caller changes; needs a Twilio account and Vault-held credentials. **Not sourced from `task.pdf`.**
-- `[FR-38] Phone verification (SMS code) required before text can become the preferred contact method` — **[L]** — depends on `FR-36` and `FR-37`. **Not sourced from `task.pdf`.**
 - `[FR-39] 2FA code delivered on the preferred contact channel (email/text, email fallback on Twilio failure)` — **[M]** — amends `FR-33`; depends on `FR-33` and `FR-38`. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md`.
 - `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]**
 - `[FR-32] Unverified account cleanup (24h expiry) + expired refresh-token cleanup (customer_refresh_tokens.expires_at)` — **[M]** — retargeted from customer_sessions during the JWT pivot; customer_refresh_tokens is now the stateful, DB-backed table with the same unbounded-growth problem
 
-## Wave 9 — Reporting & statistics
+## Wave 9 — Reporting, statistics & log retention
 
-**Rationale:** deliberately last among the feature waves — every one of these reads data produced by Waves 3–8, so building this earlier just means building against fake/incomplete data.
+**Rationale:** deliberately last among the feature waves — every one of these reads data produced by Waves 3–8, so building this earlier just means building against fake/incomplete data. The log archive job and audit-log settings (`NFR-44`, `FR-44`) were added in the 2026-10-23 rebalance. The job needs ShedLock (`FR-21`, Wave 8), and placing it here rather than in Wave 8 keeps that wave under the 80h cap.
 
 - `[FR-22] Annual cost report export (Excel/CSV)` — **[M]**
 - `[FR-23] Report contents (name, monthly price, base equivalent, annual total)` — **[S]**
 - `[FR-24] Most expensive subscription statistic` — **[S]**
 - `[FR-25] Total monthly spend statistic` — **[S]**
 - `[FR-26] Monthly cost trend (6/12 months, JSON)` — **[M]**
+- `[NFR-44] Log archive and retention job (app_logs, audit_logs)` — **[L]** — depends on `NFR-41` (Wave 2), `NFR-43` (Wave 5) and `FR-21` (Wave 8); amends `NFR-17`. See `actuator_observability.md`.
+- `[FR-44] Staff audit-log archive settings (bounded by config floors)` — **[S]** — depends on `FR-06`, `NFR-41` and `NFR-44`; `manage_audit_log_settings` is `admin`-only.
 
 ## Wave 10 — Observability & audit
 
-**Rationale:** genuinely can run in parallel with earlier waves once Wave 1 exists (auditable actions start as soon as auth does), but listed last because it's not on the critical path to a working demo — it's important, but nothing else depends on it.
+**Rationale:** genuinely can run in parallel with earlier waves once Wave 1 exists (auditable actions start as soon as auth does), but listed last because it's not on the critical path to a working demo — it's important, but nothing else depends on it. `NFR-39`, `NFR-40` and `FR-43` were added in the 2026-10-23 rebalance. **`NFR-18` is no longer listed here:** `NFR-42` (Wave 4) re-implements it, and its issue closes when `NFR-42` merges.
 
 - `[NFR-07] Auditing timestamps` — **[S]** **(standing — apply as each table is built, not as a separate pass)**
 - `[NFR-17] Audit logging of actor actions` — **[M]**
-- `[NFR-18] Distributed / request tracing` — **[M]**
-- `[NFR-32] Operational dashboards and alerting (Grafana)` — **[M]** — depends on `NFR-17`/`NFR-18` existing first (dashboards need data to show); turns `ARCHITECTURE.md` §11's monitoring guide from a manual-SQL checklist into actual dashboards/alert rules
+- `[NFR-32] Operational dashboards and alerting (Grafana)` — **[M]** — depends on `NFR-17` and `NFR-42` existing first (dashboards need data to show); Grafana itself arrives earlier with `NFR-42`, holding only the Tempo data source, and this adds the PostgreSQL and Prometheus sources. Turns `ARCHITECTURE.md` §11's monitoring guide from a manual-SQL checklist into actual dashboards/alert rules
+- `[NFR-39] Metrics contract (Prometheus registry, common tags, naming, bounded cardinality)` — **[M]** **(standing)** — depends on `NFR-36`; amends `NFR-32`'s "no separate metrics store" boundary.
+- `[NFR-40] Initial business metrics` — **[M]** — depends on `NFR-39`; pairs with `NFR-32` (no orphan metrics).
+- `[FR-43] Staff application-log settings (destination, minimum level, archive settings)` — **[M]** — depends on `FR-06`, `NFR-41`, `NFR-43` and `NFR-44` (Wave 9).
 
 ## Wave 11 — Quality gate (release readiness)
 
@@ -364,8 +412,8 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 
 Since the goal here is to actually build out and practice each domain area properly — not race a deadline — the waves above double as natural checkpoints rather than "must-have vs. cuttable" scope:
 
-- **Waves 0–6** form a legitimate first milestone: a working end-to-end flow (register/login → manage subscriptions → convert currency → record a payment). Reaching this is a good point to pause, verify the foundational patterns (layered architecture, RBAC, optimistic locking, the snapshot pattern) actually feel right in practice, and adjust before building further on top of them. (Wave 4.5, inserted mid-milestone, is exactly this kind of deliberate pause formalized into its own wave — see its rationale for why module-boundary hardening specifically earned that treatment rather than just a note here.)
-- **Waves 7–9** (retry/refunds, scheduling/notifications, reporting/statistics) are where the more distinctive enterprise patterns live — dunning logic, distributed-lock-safe scheduling, financial reporting. These are worth their own deliberate pass rather than being treated as optional extras, since they're likely a big part of what made this worth building as a multi-domain exercise in the first place.
+- **Waves 0–6** form a legitimate first milestone: a working end-to-end flow (register/login → manage subscriptions → convert currency → record a payment). Reaching this is a good point to pause, verify the foundational patterns (layered architecture, RBAC, optimistic locking, the snapshot pattern) actually feel right in practice, and adjust before building further on top of them. (Wave 4.5, inserted mid-milestone, is exactly this kind of deliberate pause formalized into its own wave — see its rationale for why module-boundary hardening specifically earned that treatment rather than just a note here. Wave 5.5 also sits inside this milestone, but for a different reason: it was split out to keep wave sizes even — see "Wave sizing".)
+- **Waves 7–9** (retry/refunds, scheduling/notifications, reporting/statistics and log retention) are where the more distinctive enterprise patterns live — dunning logic, distributed-lock-safe scheduling, financial reporting. These are worth their own deliberate pass rather than being treated as optional extras, since they're likely a big part of what made this worth building as a multi-domain exercise in the first place.
 - **Waves 10–11** (observability, audit, and the quality-gate NFRs) are the kind of thing that's easy to bolt on convincingly at a small scale but genuinely hard to get right — that gap is itself worth experiencing deliberately rather than skipping.
 
 If you do decide to reorder or skip something as you go, that's still worth writing down somewhere (even just a short note in this file or the relevant issue) — not because anyone's grading it, but because "why did we build it in this order" is exactly the kind of context that's easy to lose track of on a project spanning multiple sessions.
