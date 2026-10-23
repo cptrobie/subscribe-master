@@ -203,6 +203,15 @@ Each wave's heading carries a marker reflecting its actual current state — upd
 - **🚧 In progress** — Real implementation work has begun (actual code, not just `FR`/`NFR` entries being written).
 - **⏸️ Paused** — Was in progress; work has stopped for now without being complete. Given this project is worked ad-hoc and part-time (see "Time tracking process" above), pausing is expected and normal, not a sign of falling behind schedule — there is no schedule to fall behind. A paused wave differs from "not started" in that real work is already invested; a brief note on roughly where things left off is worth adding if it'll help on resumption, though not mandatory for every pause.
 - **✅ Complete (verified via CI)** — Fully done and verified per this project's usual discipline (see Wave 0). Documentation existing for a wave's requirements is not sufficient for this marker on its own — only real, tested, working code earns it.
+
+**When a wave is marked ✅, add a bold rollup line directly under its heading.** Copy the figures from that wave's `subtotal` line in `./scripts/time_tracking/project_time_report.sh` (shown once all its issues are closed), in this form:
+
+```
+**Rollup: estimated 100h · actual 87h 30m (12h 30m under, 13%)**
+```
+
+A short note under the line is worth adding when the numbers need context, such as time that wasn't logged.
+
 Example of a paused wave with an optional resumption note:
 
 ```
@@ -213,6 +222,9 @@ Example of a paused wave with an optional resumption note:
 ---
 
 ## Wave 0 — Project bootstrap ✅ Complete (verified via CI)
+
+**Rollup: estimated 100h · actual 30m (99h 30m under, 100%)**
+*(Only 30m was logged against Wave 0's issues, so this actual doesn't reflect the real effort — the time-tracking tooling itself (`NFR-22`) was built during this wave.)*
 
 **Rationale:** nothing else can be built, tested, or deployed without this. Do this before writing feature code, not alongside it. This wave also absorbs the non-code setup tasks that used to sit in a separate "Environment & Third-Party Setup" bucket in the Overview graph — they're one-time bootstrap work with no real ordering dependency relative to the code-focused items below, so keeping them in a separate wave/node implied a sequencing that didn't actually exist.
 
@@ -275,6 +287,9 @@ Example of a paused wave with an optional resumption note:
 - `[NFR-38] Build identity in /actuator/info` — **[S]** — depends on `NFR-36`.
 
 ## Wave 3 — Subscription management core ✅ Complete (verified via CI)
+
+**Rollup: estimated 32h · actual 42h 30m (10h 30m over, 33%)**
+*(The 32h estimate is the report's, which uses each issue's own `Estimate:` comment where one exists; the size labels below add up to 40h.)*
 
 **Rationale:** the core domain object everything else (payments, statistics, reports) hangs off of. Optimistic locking is introduced here specifically because this is the first mutable, multi-writer entity in the system.
 
