@@ -6,7 +6,10 @@ import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.error.ApiError;
+import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,12 +20,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * Unauthenticated public endpoints for gaining access to the system (FR-01: registration, FR-02:
@@ -34,19 +32,20 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Authentication", description = "Account creation, email verification and login")
 public class AuthController {
 
+  public static final String REGISTER_ENDPOINT = "POST /api/v1/auth/register";
+
   private final AuthService authService;
   private final EmailVerificationService verifyService;
+  private final IdempotencyService idemService;
 
   public AuthController(
-      AuthService authService, EmailVerificationService emailVerificationService) {
+      AuthService authService,
+      EmailVerificationService verifyService,
+      IdempotencyService idemService) {
     this.authService = authService;
-    this.verifyService = emailVerificationService;
+    this.verifyService = verifyService;
+    this.idemService = idemService;
   }
-
-  // TODO(NFR-33): accept and honor an Idempotency-Key request header on register -- check
-  // idempotency_keys before re-running its side effects (customer row, verification email),
-  // validate request_hash on key reuse, store the outcome after a successful first run (NFR-24).
-  // Split out of FR-30 into its own issue.
 
   @Operation(
       summary = "Register a new customer account",
@@ -54,15 +53,28 @@ public class AuthController {
   @ApiResponses({
     @ApiResponse(
         responseCode = "201",
-        description = "Account created",
+        description =
+            "Account created, or the original response replayed for a retried Idempotency-Key",
+        headers =
+            @Header(
+                name = "Idempotent-Replayed",
+                description = "Present and \"true\" only when this response is a replay",
+                schema = @Schema(type = "string", allowableValues = "true")),
         content = @Content(schema = @Schema(implementation = RegistrationResponse.class))),
     @ApiResponse(
         responseCode = "400",
-        description = "Body validation failure",
+        description =
+            "Body validation failure, or an Idempotency-Key that is blank or longer than "
+                + IdempotencyService.MAX_KEY_LENGTH
+                + " characters",
         content = @Content(schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
         responseCode = "409",
         description = "Email already registered",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "422",
+        description = "Idempotency-Key already used with a different request body",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
   @PostMapping(
@@ -70,10 +82,27 @@ public class AuthController {
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<RegistrationResponse> register(
-      @Valid @RequestBody RegistrationRequest request, HttpServletRequest httpRequest) {
-    var response =
-        authService.register(request.email(), request.password(), httpRequest.getRemoteAddr());
-    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+      @Parameter(
+              description =
+                  "Optional. A unique value per registration attempt (e.g. a UUID)."
+                      + " A retry with the same key and body replays the original"
+                      + " response instead of registering again.",
+              schema = @Schema(maxLength = IdempotencyService.MAX_KEY_LENGTH))
+          @RequestHeader(name = "Idempotency-Key", required = false)
+          String idempotencyKey,
+      @Valid @RequestBody RegistrationRequest request,
+      HttpServletRequest httpRequest) {
+    return idemService.execute(
+        idempotencyKey,
+        REGISTER_ENDPOINT,
+        request,
+        RegistrationResponse.class,
+        () -> {
+          var response =
+              authService.register(
+                  request.email(), request.password(), httpRequest.getRemoteAddr());
+          return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        });
   }
 
   @Operation(
