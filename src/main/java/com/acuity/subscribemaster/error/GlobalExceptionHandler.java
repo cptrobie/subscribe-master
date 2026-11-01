@@ -1,7 +1,9 @@
 package com.acuity.subscribemaster.error;
 
 import com.acuity.subscribemaster.auth.*;
+import com.acuity.subscribemaster.idempotency.IdempotencyKeyMismatchException;
 import com.acuity.subscribemaster.idempotency.IdempotentReplayCorruptedException;
+import com.acuity.subscribemaster.idempotency.InvalidIdempotencyKeyException;
 import com.acuity.subscribemaster.subscribe.InvalidSubscriptionIdentityException;
 import com.acuity.subscribemaster.support.EntityNotFoundException;
 import com.acuity.subscribemaster.support.InvalidStateTransitionException;
@@ -126,6 +128,22 @@ public class GlobalExceptionHandler {
       VerificationTokenExpiredException ex, HttpServletRequest request) {
     return body(
         HttpStatus.BAD_REQUEST, ErrorCode.VERIFICATION_TOKEN_EXPIRED, ex.getMessage(), request);
+  }
+
+  @ExceptionHandler(InvalidIdempotencyKeyException.class)
+  public ResponseEntity<ApiError> handleInvalidIdempotencyKey(
+      InvalidIdempotencyKeyException ex, HttpServletRequest request) {
+    return body(HttpStatus.BAD_REQUEST, ErrorCode.MALFORMED_REQUEST, ex.getMessage(), request);
+  }
+
+  @ExceptionHandler(IdempotencyKeyMismatchException.class)
+  public ResponseEntity<ApiError> handleIdempotencyKeyMismatch(
+      IdempotencyKeyMismatchException ex, HttpServletRequest request) {
+    return body(
+        HttpStatus.UNPROCESSABLE_CONTENT,
+        ErrorCode.IDEMPOTENCY_KEY_MISMATCH,
+        ex.getMessage(),
+        request);
   }
 
   @ExceptionHandler(AccountLockedException.class)

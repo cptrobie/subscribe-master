@@ -73,6 +73,8 @@ app:
   login-lockout:
     max-attempts: 5
     duration-minutes: 15
+  idempotency:
+    ttl: PT24H
   mail:
     from-address: no-reply@localhost.test
     from-name: ${app.branding.product-name}

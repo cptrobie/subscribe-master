@@ -261,7 +261,7 @@ Application secrets — database credentials, SMTP credentials, the Stripe API k
 - [ ] Never edit an already-deployed Flyway migration — add a new one.
 - [ ] When adding a new subscription provider, insert into `subscription_providers` — don't hardcode provider names in application code.
 - [ ] Never commit a Vault token or read a secret from `.env` "just for local dev convenience" — local dev uses Vault the same way staging/prod do.
-- [ ] Any new POST endpoint with a real side effect (creates data, sends an email, eventually charges a card) accepts an `Idempotency-Key` header and checks `idempotency_keys` (`V7`) before re-running that side effect — this is what distinguishes a genuine client retry from a truly new request, and it's what will prevent registration from sending a duplicate verification email (`NFR-33`) or `FR-12` (Wave 6) from double-charging a card on a network-drop-and-retry.
+- [ ] Any new POST endpoint with a real side effect a retry would repeat (creates data, sends an email, eventually charges a card) accepts an `Idempotency-Key` header and checks `idempotency_keys` (`V7`) before re-running that side effect — this is what distinguishes a genuine client retry from a truly new request, and it's what will prevent registration from sending a duplicate verification email (`NFR-33`) or `FR-12` (Wave 6) from double-charging a card on a network-drop-and-retry.
 
 ---
 

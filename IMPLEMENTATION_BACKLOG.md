@@ -74,7 +74,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 
 **New REST endpoint / controller:**
 - [ ] Path is prefixed with a version segment (`/api/v1/...`), not bare (NFR-25)
-- [ ] **(POST with side effects only)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
+- [ ] **(POST with side effects a retry would repeat; login and state-machine transitions such as pause/cancel/resume are exempt, see NFR-24)** Accepts and honors an `Idempotency-Key` header — checks `idempotency_keys` before re-running any side effect, validates `request_hash` on key reuse, stores the outcome after a successful first run (NFR-24)
 - [ ] Swagger/OpenAPI annotations present (NFR-09)
 - [ ] Controller contains no business logic — delegates to a service, stays thin (NFR-01)
 - [ ] Constructor injection only, no field injection (NFR-14)
@@ -258,7 +258,7 @@ Example of a paused wave with an optional resumption note:
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
 
-**FR-30, FR-31 and NFR-34 are complete; NFR-33 and FR-40 remain open.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — was done before Wave 3 started, and FR-30 (email verification) was picked back up after Wave 3 closed, followed by FR-31 (login blocked until verified). Two pieces were split out of FR-30 during implementation to keep it reviewable: registration idempotency (`NFR-33`) and resending the verification email (`FR-40`) — the latter now more pressing, since an unverified customer whose email never arrived can no longer log in. `NFR-34` (auditing a failed verification send) was added afterward as a small follow-on to `FR-30`. This note stays until the wave closes.
+**FR-30, FR-31, NFR-34 and NFR-33 are complete; FR-40 remains open.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — was done before Wave 3 started, and FR-30 (email verification) was picked back up after Wave 3 closed, followed by FR-31 (login blocked until verified). Two pieces were split out of FR-30 during implementation to keep it reviewable: registration idempotency (`NFR-33`) and resending the verification email (`FR-40`) — the latter now more pressing, since an unverified customer whose email never arrived can no longer log in. `NFR-34` (auditing a failed verification send) was added afterward as a small follow-on to `FR-30`. This note stays until the wave closes.
 
 - `[FR-01] User registration endpoint (/api/v1/auth/register)` — **[S]**
 - `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
@@ -305,6 +305,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-10] Pagination & filtering (Specification API, status/currency/price range)` — **[M]**
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
+- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscriptions)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-42] Request tracing via Micrometer Tracing + Tempo; drop trace_spans` — **[M]** — depends on `NFR-36` (Wave 2); re-implements `NFR-18`, whose issue closes when this merges; brings up a minimal Grafana with only the Tempo data source (`NFR-32` adds the rest later).
 
 ## Wave 4.5 — Module boundary hardening (modulith)

@@ -12,8 +12,10 @@ import com.acuity.subscribemaster.auth.dto.EmailVerificationResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
 import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.error.GlobalExceptionHandler;
+import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +26,11 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 public class AuthControllerTest {
 
+  public static final String REGISTER_ENDPOINT = "POST /api/v1/auth/register";
+
   private final AuthService authService = mock(AuthService.class);
   private final EmailVerificationService verifyService = mock(EmailVerificationService.class);
+  private final IdempotencyService idemService = mock(IdempotencyService.class);
 
   private MockMvc mvc;
 
@@ -34,7 +39,12 @@ public class AuthControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    AuthController controller = new AuthController(authService, verifyService);
+    // Idempotency has its own tests (IdempotencyServiceTest); here the mock just runs the
+    // operation, as the real service does when no Idempotency-Key is sent.
+    when(idemService.execute(any(), any(), any(), any(), any()))
+        .thenAnswer(inv -> inv.<Supplier<?>>getArgument(4).get());
+
+    AuthController controller = new AuthController(authService, verifyService, idemService);
 
     mvc =
         MockMvcBuilders.standaloneSetup(controller)

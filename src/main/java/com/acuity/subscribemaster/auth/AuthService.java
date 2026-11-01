@@ -159,8 +159,9 @@ public class AuthService {
     // TODO: a concurrent registration for the same email could still land between the
     // existsByEmail check above and this insert -- the DB's citext unique constraint would
     // catch it, but it would currently surface as a raw, unhandled exception rather than a
-    // clean UserAlreadyExistsException. Deliberately deferred -- revisit alongside NFR-33
-    // (registration idempotency), which would also help here.
+    // clean AccountAlreadyExistsException. Still open after NFR-33: an Idempotency-Key only
+    // collapses retries that share a key, so two different keys (or none) for the same email
+    // can still race here.
     var customer = customerRepo.saveAndFlush(new Customer(email, pwdEncoder.encode(password)));
 
     auditLogService.recordEvent(

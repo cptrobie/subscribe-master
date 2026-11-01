@@ -68,6 +68,7 @@ class SubscriptionApiIT {
     registry.add("spring.datasource.password", postgres::getPassword);
     registry.add("jwt.private-key", () -> readTestResource("test-jwt-keys/jwt-private.pem"));
     registry.add("jwt.public-key", () -> readTestResource("test-jwt-keys/jwt-public.pem"));
+    registry.add("app.idempotency.hmac-secret", () -> "test_only_not_a_real_secret");
   }
 
   private static String readTestResource(String location) {

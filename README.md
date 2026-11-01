@@ -66,12 +66,22 @@ This project started from a take-home assignment brief and has since grown into 
      spring.datasource.username=subscribe_master \
      spring.datasource.password=local_dev_only_not_a_real_secret \
      jwt.private-key=@src/main/resources/local-dev-keys/jwt-private.pem \
-     jwt.public-key=@src/main/resources/local-dev-keys/jwt-public.pem
+     jwt.public-key=@src/main/resources/local-dev-keys/jwt-public.pem \
+     app.idempotency.hmac-secret=local_dev_only_not_a_real_secret
    ```
+
+   **Already seeded before `app.idempotency.hmac-secret` existed?** Add just that key with `patch`, not `put` -- `vault kv put` replaces every key at the path, which would wipe the database credentials and JWT keys:
+
+   ```
+   vault kv patch -address=http://localhost:8200 secret/subscribe-master \
+     app.idempotency.hmac-secret=local_dev_only_not_a_real_secret
+   ```
+
+   `app.idempotency.hmac-secret` keys the HMAC that fingerprints `Idempotency-Key` requests (NFR-33); the app won't start without it.
 
    **No SMTP credentials are needed locally** — Mailpit accepts mail without authentication. Production is different: its SMTP credentials live in Vault under the same path, as `spring.mail.username` and `spring.mail.password` (see `ARCHITECTURE.md` §9).
  
-6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same four key/value pairs.
+6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same five key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
 7. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
