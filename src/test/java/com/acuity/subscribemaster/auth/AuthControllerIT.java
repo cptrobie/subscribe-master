@@ -10,6 +10,9 @@ import com.acuity.subscribemaster.auth.dto.*;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.error.ApiError;
 import com.acuity.subscribemaster.error.ErrorCode;
+import com.acuity.subscribemaster.idempotency.IdempotencyPk;
+import com.acuity.subscribemaster.idempotency.IdempotencyRepository;
+import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import com.acuity.subscribemaster.support.PemKeys;
 import com.acuity.subscribemaster.support.Tokens;
 import com.icegreen.greenmail.junit5.GreenMailExtension;
@@ -23,6 +26,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -67,6 +76,7 @@ import org.testcontainers.utility.DockerImageName;
 public class AuthControllerIT {
 
   private static final String VAULT_TOKEN = "test-root-token";
+  private static final String REPLAYED_HEADER = "Idempotent-Replayed";
 
   @Value("${jwt.public-key}")
   private String jwtPublicKeyPem;
@@ -100,6 +110,7 @@ public class AuthControllerIT {
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private CustomerRepository customerRepo;
   @Autowired private CustomerEmailVerificationTokenRepository tokenRepo;
+  @Autowired private IdempotencyRepository idemRepo;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private AuditLogRepository auditLogRepo;
 
@@ -576,5 +587,146 @@ public class AuthControllerIT {
             auditLogRepo.findByActorIdAndAction(
                 customer.getId(), AuditAction.EMAIL_VERIFICATION_SEND_FAILED))
         .hasSize(1);
+  }
+
+  // --- NFR-33: Idempotency-Key on register ---
+
+  @Test
+  void sameKeyTwice_registersOnce_andReplaysIdenticalResponse() {
+    // Arrange
+    var email = "register.thenReuse@example.com";
+    var rawPassword = "easyPassword!#123";
+    var reqKey = UUID.randomUUID().toString();
+    var regRequest = new RegistrationRequest(email, rawPassword);
+
+    // Act
+    var regOrigResponse = register(regRequest, reqKey, RegistrationResponse.class);
+    var customerId = regOrigResponse.getBody().id();
+    var regDupResponse = register(regRequest, reqKey, RegistrationResponse.class);
+
+    // Assert
+    var row = idemRepo.findById(new IdempotencyPk(reqKey, AuthController.REGISTER_ENDPOINT));
+    assertThat(row).isPresent();
+    assertThat(row.get().getResponseStatus()).isEqualTo(201);
+
+    assertThat(regOrigResponse.getHeaders().getFirst(REPLAYED_HEADER)).isNull();
+    assertThat(regDupResponse.getHeaders().getFirst(REPLAYED_HEADER)).isEqualTo("true");
+
+    assertThat(regOrigResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(regDupResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    assertThat(regDupResponse.getBody()).isEqualTo(regOrigResponse.getBody());
+
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.REGISTERED)).hasSize(1);
+    assertThat(tokenRepo.findAll())
+        .filteredOn(t -> t.getCustomerId().equals(customerId))
+        .hasSize(1);
+
+    greenMail.waitForIncomingEmail(5000, 1);
+    assertThat(greenMail.getReceivedMessagesForDomain(email)).hasSize(1);
+  }
+
+  @Test
+  void sameKeyDifferentBody_returnsMismatch_andRegistersNothing() {
+    // Arrange
+    var origEmail = "register.mismatch.orig@example.com";
+    var diffEmail = "register.mismatch.diff@example.com";
+    var rawPassword = "easyPassword!#123";
+    var reqKey = UUID.randomUUID().toString();
+    var origRegRequest = new RegistrationRequest(origEmail, rawPassword);
+    var diffRegRequest = new RegistrationRequest(diffEmail, rawPassword);
+
+    // Act
+    var origResponse = register(origRegRequest, reqKey, RegistrationResponse.class);
+    var errorResponse = register(diffRegRequest, reqKey, ApiError.class);
+
+    // Assert
+    assertThat(customerRepo.existsByEmail(diffEmail)).isFalse();
+
+    assertThat(origResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    assertThat(errorResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    assertThat(errorResponse.getBody()).isNotNull();
+    assertThat(errorResponse.getBody().code()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_MISMATCH.name());
+  }
+
+  @Test
+  void overLongKey_returnsMalformedRequest() {
+    // Arrange
+    var email = "register.longKey@example.com";
+    var rawPassword = "easyPassword!#123";
+    var tooLongKey = "a".repeat(IdempotencyService.MAX_KEY_LENGTH + 1);
+    var tooLongRequest = new RegistrationRequest(email, rawPassword);
+
+    // Act
+    var tooLongResponse = register(tooLongRequest, tooLongKey, ApiError.class);
+
+    // Assert
+    assertThat(customerRepo.existsByEmail(email)).isFalse();
+
+    assertThat(tooLongResponse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(tooLongResponse.getBody()).isNotNull();
+    assertThat(tooLongResponse.getBody().code()).isEqualTo(ErrorCode.MALFORMED_REQUEST.name());
+    assertThat(tooLongResponse.getBody().message())
+        .contains(String.valueOf(IdempotencyService.MAX_KEY_LENGTH));
+  }
+
+  /**
+   * Two requests with the same key, released together. Which one wins, and whether they actually
+   * overlap, can't be controlled, so this only asserts what must hold in every interleaving: both
+   * get the same 201, exactly one is a replay, and the customer was registered (and emailed) once.
+   * If they happen not to overlap it still passes, as an ordinary replay -- the lost-race paths are
+   * covered deterministically in IdempotencyServiceTest. Deliberately says nothing about
+   * REGISTRATION_REJECTED audits: a loser that reaches existsByEmail after the winner commits
+   * writes one (REQUIRES_NEW), and one that blocks on the insert doesn't.
+   */
+  @Test
+  void concurrentSameKey_registersOnce_bothGetTheSameResponse() throws Exception {
+    // Arrange
+    var email = "register.concurrent@example.com";
+    var reqKey = UUID.randomUUID().toString();
+    var regRequest = new RegistrationRequest(email, "easyPassword!#123");
+    var start = new CountDownLatch(1);
+    Callable<ResponseEntity<RegistrationResponse>> call =
+        () -> {
+          start.await(); // hold both threads until both are ready, then release them together
+          return register(regRequest, reqKey, RegistrationResponse.class);
+        };
+
+    // Act
+    ResponseEntity<RegistrationResponse> first;
+    ResponseEntity<RegistrationResponse> second;
+    try (var pool = Executors.newFixedThreadPool(2)) {
+      var firstFuture = pool.submit(call);
+      var secondFuture = pool.submit(call);
+      start.countDown();
+      first = firstFuture.get(30, TimeUnit.SECONDS);
+      second = secondFuture.get(30, TimeUnit.SECONDS);
+    }
+
+    // Assert: both succeeded with the same response, exactly one of them a replay
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(second.getBody()).isEqualTo(first.getBody());
+    assertThat(List.of(first, second))
+        .filteredOn(r -> "true".equals(r.getHeaders().getFirst(REPLAYED_HEADER)))
+        .hasSize(1);
+
+    // Assert: registered once
+    var customerId = first.getBody().id();
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.REGISTERED)).hasSize(1);
+    assertThat(tokenRepo.findAll())
+        .filteredOn(t -> t.getCustomerId().equals(customerId))
+        .hasSize(1);
+    greenMail.waitForIncomingEmail(5000, 1);
+    assertThat(greenMail.getReceivedMessagesForDomain(email)).hasSize(1);
+  }
+
+  private <T> ResponseEntity<T> register(RegistrationRequest request, String key, Class<T> type) {
+    var headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.set("Idempotency-Key", key);
+    return restTemplate.postForEntity(
+        "/api/v1/auth/register", new HttpEntity<>(request, headers), type);
   }
 }

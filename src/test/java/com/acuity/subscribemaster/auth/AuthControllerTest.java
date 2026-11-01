@@ -15,6 +15,7 @@ import com.acuity.subscribemaster.error.GlobalExceptionHandler;
 import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,11 @@ public class AuthControllerTest {
   void setUp() {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
+
+    // Idempotency has its own tests (IdempotencyServiceTest); here the mock just runs the
+    // operation, as the real service does when no Idempotency-Key is sent.
+    when(idemService.execute(any(), any(), any(), any(), any()))
+        .thenAnswer(inv -> inv.<Supplier<?>>getArgument(4).get());
 
     AuthController controller = new AuthController(authService, verifyService, idemService);
 
