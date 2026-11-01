@@ -15,9 +15,9 @@ registration still verifies the email address, and login still requires
 
 | ID | Requirement | Size | Wave | Depends on |
 |---|---|---|---|---|
-| `FR-36` | Phone number + `preferred_contact_method` (email/text, default email) on `customers`; customer self-service update endpoint | M (12h) | 2 | nothing |
-| `FR-37` | `SmsSender` backed by Twilio (reusable, mirrors `EmailSender`) | M (12h) | 8 | nothing (Twilio account) |
-| `FR-38` | Phone verification (SMS code, `phone_verified`); required before text can become the preferred method | L (24h) | 8 | `FR-36`, `FR-37` |
+| `FR-36` | Phone number + `preferred_contact_method` (email/text, default email) on `customers`; customer self-service update endpoint | M (12h) | 5.5 | nothing |
+| `FR-37` | `SmsSender` backed by Twilio (reusable, mirrors `EmailSender`) | M (12h) | 5.5 | nothing (Twilio account) |
+| `FR-38` | Phone verification (SMS code, `phone_verified`); required before text can become the preferred method | L (24h) | 5.5 | `FR-36`, `FR-37` |
 | `FR-39` | 2FA code delivered on the preferred channel, with email fallback (amends `FR-33`) | M (12h) | 8 | `FR-33`, `FR-38` |
 
 New work: ~60h. Plus a revision to `FR-20` (S → M, +8h) for channel routing of
@@ -142,22 +142,27 @@ Related changes the new behavior forces:
 
 ## Scheduling
 
+*(Rescheduled 2026-10-23 as part of a rebalance of every open wave to 60–70h,
+capped at 80h — see `IMPLEMENTATION_BACKLOG.md`. Earlier placement: `FR-36` in
+Wave 2, `FR-37`–`FR-39` in Wave 8.)*
+
 The set is split across two waves by dependency, not placed in one.
 
-- **Wave 2: `FR-36` only**, before `FR-33`/`FR-34`. It has no dependencies, and
-  `FR-34` also changes `customers` (`two_factor_enabled`), so one pass over that
-  schema is cheaper than two. On its own it lets a customer store a number but
-  keep email selected; text becomes selectable only once `FR-38` verifies it.
-- **Wave 8: `FR-37` → `FR-38` → `FR-39`**, then `FR-19`'s routing, after `FR-20`.
-  `FR-37` is the sibling of `EmailSender` behind `FR-20`'s abstraction and `FR-19` is its
-  consumer, so they belong together. `FR-33`/`FR-34` ship email-only in Wave 2 as
-  originally designed, and `FR-39` later amends `FR-33`.
-- **Why not all in Wave 2:** Wave 2 is "Authorization extensions" and gates Wave
-  4.5 and Wave 9 on RBAC work. Adding ~48h of SMS work there would delay that
-  gate for features nothing downstream of Wave 2 needs.
-- **Pull-forward option:** `FR-37`–`FR-39` have no dependency on Wave 3 or Wave 6.
-  If text-message 2FA is wanted sooner, build them right after `FR-33` (which
-  no longer waits on `FR-30`, which is complete).
+- **Wave 5.5 — Two-factor authentication & contact preferences: `FR-36` →
+  `FR-33` → `FR-34` → `FR-37` → `FR-38`.** `FR-33`/`FR-34` (2FA) moved here from
+  Wave 2 together with `FR-36`, so the original reason for grouping them still
+  holds: `FR-34` also changes `customers` (`two_factor_enabled`), and one pass
+  over that schema is cheaper than two. `FR-37`/`FR-38` are pulled forward from
+  Wave 8, using the pull-forward option this section previously described: they
+  have no dependency on Waves 3 or 6. `FR-33`/`FR-34` still ship email-only
+  first, as originally designed.
+- **Wave 8: `FR-39`**, then `FR-19`'s routing, after `FR-20`. `FR-39` amends
+  `FR-33` and needs `FR-38`, both now in Wave 5.5. `FR-20` wraps `FR-37`'s
+  `SmsSender`, which already exists by then.
+- **Why after Wave 4.5, not in Wave 2:** Wave 2 gates Wave 4.5 only on RBAC
+  work (`FR-06`). 2FA and SMS aren't needed before 4.5, so building them after
+  it puts them in the right modules from their first line, with no retrofit.
 
-Effect on wave totals: Wave 2 gains ~12h; Wave 8 gains ~48h plus the ~8h `FR-20`
-revision.
+Effect on wave totals: Wave 5.5 is new at ~76h (`FR-36`, `FR-33`, `FR-34`,
+`FR-37`, `FR-38`); Wave 2 loses ~40h; Wave 8 loses ~36h but keeps `FR-39` and
+the ~8h `FR-20` revision.

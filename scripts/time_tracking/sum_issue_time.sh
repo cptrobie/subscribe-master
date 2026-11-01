@@ -76,8 +76,9 @@ def fmt(minutes):
     return f"{m}m"
 
 
-# Determine estimate: prefer an explicit "Estimate: ~..." comment,
-# otherwise derive it from the size-S/M/L label.
+# Determine estimate: prefer the latest explicit "Estimate: ~..." comment
+# (so a revised estimate can be recorded with a new comment), otherwise
+# derive it from the size-S/M/L label.
 estimate_minutes = None
 estimate_source = None
 
@@ -89,7 +90,6 @@ for c in comments:
         if parsed:
             estimate_minutes = parsed
             estimate_source = "explicit comment"
-            break
 
 if estimate_minutes is None:
     for label in labels:
