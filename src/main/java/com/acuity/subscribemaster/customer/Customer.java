@@ -28,8 +28,9 @@ public class Customer {
   @Column(nullable = false, updatable = false)
   private UUID id;
 
-  // citext in the schema — declared here so Hibernate schema validation matches.
-  @Column(columnDefinition = "citext", nullable = false, unique = true, updatable = false)
+  // citext in the schema — declared here so Hibernate schema validation matches. Updatable only
+  // through changeEmail(), for an unverified account (FR-40).
+  @Column(columnDefinition = "citext", nullable = false, unique = true)
   private String email;
 
   @Column(name = "password_hash")
@@ -85,6 +86,27 @@ public class Customer {
    */
   public void markEmailVerified() {
     this.isEmailVerified = true;
+  }
+
+  /**
+   * Corrects the address of an account that hasn't been verified yet -- the FR-40 resend's fix for
+   * a mistyped registration email. The caller is responsible for rejecting an address that already
+   * belongs to another account (the {@code citext} unique constraint is the backstop) and for
+   * invalidating the verification tokens sent to the old address.
+   *
+   * <p>Refused for a verified account. Changing a verified address is a different flow, in which
+   * the old address stays authoritative until the new one is confirmed; this method must not become
+   * a way around that. FR-40 rejects a verified account with a 409 before reaching here, so in
+   * normal use the guard never fires.
+   *
+   * @param newEmail the corrected address; compared case-insensitively by the database
+   * @throws IllegalStateException if the account's email is already verified
+   */
+  public void changeEmail(String newEmail) {
+    if (isEmailVerified) {
+      throw new IllegalStateException("cannot change a verified customer's email here");
+    }
+    this.email = newEmail;
   }
 
   public UUID getId() {
