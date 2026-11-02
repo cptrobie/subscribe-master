@@ -11,11 +11,8 @@ import com.acuity.subscribemaster.support.EmailMasker;
 import com.acuity.subscribemaster.support.JwtIssuer;
 import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -56,42 +53,11 @@ import org.springframework.transaction.annotation.Transactional;
  * password. It also runs after the failed-attempt counter is reset: a correct password proves the
  * customer, so a user waiting on their verification email isn't left one typo from a lockout.
  *
- * <p><b>Credential errors are unified deliberately.</b> "Email not found" and "wrong password" both
- * throw the same {@link InvalidCredentialsException}, with the same message and HTTP status --
- * distinguishing them would let an attacker enumerate registered emails via the login endpoint
- * itself, the same vulnerability {@link AccountAlreadyExistsException}'s generic message already
- * guards against on registration.
- *
- * <p><b>Lockout</b> ({@code app.login-lockout.max-attempts} consecutive failed attempts lock the
- * account for {@code app.login-lockout.duration-minutes}) is live-expiry-checked on {@code
- * customers.locked_until}, not a scheduled job -- same reasoning as FR-33's 2FA lockout design.
- * Unlike the credential-unification above, a locked account returns a distinct {@link
- * AccountLockedException}, not the generic {@link InvalidCredentialsException} -- deliberately,
- * after weighing the trade-off: a genuine user locked out by a handful of mistyped attempts has no
- * way to know why their presumably-correct password stopped working, or when to retry, under a
- * fully generic response. The information this reveals to an attacker (that the account exists)
- * costs them {@code app.login-lockout.max-attempts} full attempts to obtain, versus a single
- * request via registration enumeration -- a meaningfully higher attack cost, and lockout itself
- * already blocks sustained automated probing regardless of what the response reveals. Only the
- * lockout trigger itself (the 5th failure) is audited, attributed to the real customer being locked
- * -- not every failed attempt, which would make audit_logs unusably noisy for what's often just a
- * routine mistyped password.
- *
- * <p><b>Failure state survives the exception.</b> {@link #login} records a failed attempt (and, on
- * the threshold failure, the lock itself) and then throws, so it's marked {@code noRollbackFor}
- * both exceptions -- otherwise Spring's default rollback on unchecked exceptions discards the
- * counter and lock every time, and the account never locks. {@link EmailNotVerifiedException} is
- * listed too, for the same reason: without it, the counter reset that precedes it is rolled back
- * with the exception. The ACCOUNT_LOCKED audit entry is unaffected either way, since {@link
- * AuditLogService} writes in its own REQUIRES_NEW transaction; that's what hid the original bug. An
- * expired lock is cleared, with the counter reset to zero, before the password is checked, so the
- * first wrong password after a lock runs out counts as attempt one rather than re-locking the
- * account immediately.
- *
- * <p><b>Known, deliberately deferred gap:</b> nonexistent-email login attempts get no rate-limiting
- * or audit logging at all -- there's no customer row to attach a counter to. A real fix needs
- * IP-based rate limiting, a genuinely separate mechanism from the per-account lockout above; out of
- * scope here, revisit if abuse is ever observed.
+ * <p><b>Credentials and lockout are {@link CredentialChecker}'s job.</b> Login calls it first; it
+ * owns the unified credential error, the per-account lockout, why the failed-attempt counter is
+ * committed in its own transaction, and the deferred gap for nonexistent emails. Login itself
+ * changes nothing in the database, so it has no transaction of its own: it reloads the customer by
+ * the id the checker returns, checks verification, then issues the JWT.
  *
  * <p>Idempotency (NFR-24) is deliberately not enforced on login: a retried request simply issues a
  * second, independent JWT -- both remain valid until their own expiry, which is a minor annoyance,
@@ -102,12 +68,11 @@ public class AuthService {
   private final CustomerRepository customerRepo;
   private final JwtIssuer jwtIssuer;
   private final PasswordEncoder pwdEncoder;
+  private final CredentialChecker credChecker;
   private final CustomerEmailVerificationTokenRepository emailVerifyTokenRepo;
   private final EmailVerificationProperties emailVerifyProps;
   private final ApplicationEventPublisher events;
   private final AuditLogService auditLogService;
-  private final int maxLoginAttempts;
-  private final int lockoutDurationMinutes;
 
   private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
@@ -115,21 +80,19 @@ public class AuthService {
       CustomerRepository customerRepository,
       JwtIssuer jwtIssuer,
       PasswordEncoder passwordEncoder,
+      CredentialChecker credentialChecker,
       CustomerEmailVerificationTokenRepository customerEmailVerificationTokenRepository,
       EmailVerificationProperties emailVerificationProperties,
       ApplicationEventPublisher eventPublisher,
-      AuditLogService auditLogService,
-      @Value("${app.login-lockout.max-attempts}") int maxLoginAttempts,
-      @Value("${app.login-lockout.duration-minutes}") int lockoutDurationMinutes) {
+      AuditLogService auditLogService) {
     this.customerRepo = customerRepository;
     this.jwtIssuer = jwtIssuer;
     this.pwdEncoder = passwordEncoder;
+    this.credChecker = credentialChecker;
     this.emailVerifyTokenRepo = customerEmailVerificationTokenRepository;
     this.emailVerifyProps = emailVerificationProperties;
     this.events = eventPublisher;
     this.auditLogService = auditLogService;
-    this.maxLoginAttempts = maxLoginAttempts;
-    this.lockoutDurationMinutes = lockoutDurationMinutes;
   }
 
   @Transactional
@@ -193,50 +156,14 @@ public class AuthService {
         customer.getCreatedAt());
   }
 
-  @Transactional(
-      noRollbackFor = {
-        InvalidCredentialsException.class,
-        AccountLockedException.class,
-        EmailNotVerifiedException.class
-      })
   public LoginResponse login(String email, String password, String ipAddress) {
     var maskedEmail = EmailMasker.mask(email);
 
     logger.info("login attempt for {}", maskedEmail);
 
-    // 1. Check login credential's validity
-    var customer = customerRepo.findByEmail(email).orElseThrow(this::invalidCredentials);
-    var customerId = customer.getId();
-
-    // 2. Reject if locked; reset an expired lock
-    var now = Instant.now();
-    var lockedUntil = customer.getLockedUntil();
-
-    if (lockedUntil != null) {
-      if (lockedUntil.isAfter(now)) {
-        logger.warn("Customer {}: account is locked", customerId);
-        throw new AccountLockedException();
-      }
-      customer.setFailedLoginCount(0);
-      customer.setLockedUntil(null);
-      logger.info("Customer {}: expired lock cleared", customerId);
-    }
-
-    // 3. Verify the password & set the failedLoginCounter if not verified
-    if (!pwdEncoder.matches(password, customer.getPasswordHash())) {
-
-      customer.setFailedLoginCount(customer.getFailedLoginCount() + 1);
-
-      if (customer.getFailedLoginCount() < maxLoginAttempts) {
-        throw invalidCredentials();
-      }
-      customer.setLockedUntil(now.plus(lockoutDurationMinutes, ChronoUnit.MINUTES));
-      throw lockAccount(customerId, ipAddress);
-    }
-
-    // 4. If successful, clear brute-force counters
-    customer.setFailedLoginCount(0);
-    customer.setLockedUntil(null);
+    // Steps 1–4 have moved to CredentialChecker.check()
+    var customerId = credChecker.check(email, password, ipAddress);
+    var customer = customerRepo.findById(customerId).orElseThrow(InvalidCredentialsException::new);
 
     // 5. Check if the account has been verified before proceeding
     if (!customer.getIsEmailVerified()) {
@@ -298,17 +225,4 @@ public class AuthService {
     return new UserAlreadyExistsException();
   }
    */
-
-  private InvalidCredentialsException invalidCredentials() {
-    // Placeholder for IP-based rate limiting on nonexistent-email login attempts --
-    // see this class's Javadoc ("Known, deliberately deferred gap") for why this
-    // isn't built yet. This is the natural landing spot for that logic once it is.
-    return new InvalidCredentialsException();
-  }
-
-  private AccountLockedException lockAccount(UUID customerId, String ipAddress) {
-    auditLogService.recordEvent(
-        ActorType.CUSTOMER, customerId, AuditAction.ACCOUNT_LOCKED, "auth", customerId, ipAddress);
-    return new AccountLockedException();
-  }
 }

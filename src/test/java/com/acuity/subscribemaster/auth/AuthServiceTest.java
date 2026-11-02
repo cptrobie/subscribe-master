@@ -37,6 +37,7 @@ class AuthServiceTest {
   @Mock private CustomerRepository customerRepo;
   @Mock private JwtIssuer jwtIssuer;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private CredentialChecker credChecker;
   @Mock private CustomerEmailVerificationTokenRepository emailVerifyTokenRepo;
   @Mock private AuditLogService auditLogService;
   @Mock private ApplicationEventPublisher events;
@@ -54,12 +55,11 @@ class AuthServiceTest {
             customerRepo,
             jwtIssuer,
             passwordEncoder,
+            credChecker,
             emailVerifyTokenRepo,
             emailVerifyProps,
             events,
-            auditLogService,
-            5, // maxLoginAttempts
-            15); // lockoutDurationMinutes
+            auditLogService);
   }
 
   @Test
@@ -219,7 +219,27 @@ class AuthServiceTest {
    */
 
   @Test
-  void successfulLogin_savesHashedTokenResponseCarriesSessionExpiresAtCountersReset() {
+  void rejectedCredentials_propagatesCheckerExceptionAndIssuesNoJwt() {
+    // Arrange
+    var email = "test@example.com";
+    var rawPassword = "easyPassword!#123";
+    var ipAddress = "192.168.0.1";
+
+    when(credChecker.check(email, rawPassword, ipAddress))
+        .thenThrow(new InvalidCredentialsException());
+
+    // Act
+    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
+        .isInstanceOf(InvalidCredentialsException.class);
+
+    // Assert
+    verify(customerRepo, never()).findById(any());
+    verifyNoInteractions(jwtIssuer);
+    verifyNoInteractions(auditLogService);
+  }
+
+  @Test
+  void successfulLogin_issuesJwtForCheckedCustomer() {
     // Arrange
     var email = "test@example.com";
     var rawPassword = "easyPassword!#123";
@@ -228,14 +248,10 @@ class AuthServiceTest {
     var customerId = UUID.randomUUID();
     var issuedExpiresAt = Instant.now().plus(5L, ChronoUnit.MINUTES);
     var issuedToken = new JwtIssuer.IssuedToken("fake.jwt.token", issuedExpiresAt);
-
-    // Customer has no constructor/setter for createdAt -- it's Hibernate-managed
-    // via @CreationTimestamp -- so reflection is the only way to simulate a
-    // persisted row's real timestamp here.
     var loggedInCustomer = new Customer(customerId, email, encodedPassword, true, true);
 
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(loggedInCustomer));
-    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
+    when(credChecker.check(email, rawPassword, ipAddress)).thenReturn(customerId);
+    when(customerRepo.findById(customerId)).thenReturn(Optional.of(loggedInCustomer));
     when(jwtIssuer.issue(customerId)).thenReturn(issuedToken);
 
     // Act
@@ -248,214 +264,25 @@ class AuthServiceTest {
 
     // Assert: the customer's own ID is what gets passed to the issuer
     verify(jwtIssuer).issue(customerId);
-
-    // Assert: successful login resets both lockout-tracking fields
-    assertThat(loggedInCustomer.getFailedLoginCount()).isEqualTo(0);
-    assertThat(loggedInCustomer.getLockedUntil()).isNull();
     verifyNoInteractions(auditLogService);
   }
 
   @Test
-  void unregisteredEmailLoginFailure_respondsWithInvalidCredentialsExceptionThrown() {
-    // Arrange
-    var email = "test@example.com";
-    var rawPassword = "easyPassword!#123";
-    var ipAddress = "192.168.0.1";
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.empty());
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
-        .isInstanceOf(InvalidCredentialsException.class);
-
-    // Assert: the rejection short-circuits cleanly -- no JWT issued, no password
-    // comparison attempted (there's no real customer/password hash to compare against)
-    verify(jwtIssuer, never()).issue(any());
-    verify(passwordEncoder, never()).matches(anyString(), anyString());
-    verifyNoInteractions(auditLogService);
-  }
-
-  @Test
-  void
-      registeredEmailWrongPasswordBelowFailureCountThreshold_respondsWithInvalidCredentialsExceptionThrown() {
-    // Arrange
-    var email = "test@example.com";
-    var wrongPassword = "guessedAtPassword";
-    var encodedPassword = "bCrypted_password";
-    var ipAddress = "192.168.0.1";
-    var customerId = UUID.randomUUID();
-    var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
-    when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
-        .isInstanceOf(InvalidCredentialsException.class);
-
-    // Assert: that the failedloginCount gets incremented, but since it has not met the
-    // lockout threshold, the lockedUntil remain Null
-    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(1);
-    assertThat(registeredCustomer.getLockedUntil()).isNull();
-
-    // Assert: a single below-threshold failure is NOT audited -- only the lockout
-    // trigger itself is (see the class Javadoc's reasoning on audit-log noise)
-    verifyNoInteractions(auditLogService);
-  }
-
-  @Test
-  void
-      registeredEmailWrongPasswordHitsFailureCountThreshold_respondsWithAccountLockedExceptionThrown() {
-    // Arrange
-    var email = "test@example.com";
-    var wrongPassword = "guessedAtPassword";
-    var encodedPassword = "bCrypted_password";
-    var ipAddress = "192.168.0.1";
-    var customerId = UUID.randomUUID();
-    var failedLoginCountThresholdValue = 5;
-    var lockedUntil = Instant.now().plus(15L, ChronoUnit.MINUTES);
-
-    var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
-    registeredCustomer.setFailedLoginCount(failedLoginCountThresholdValue - 1);
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
-    when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
-        .isInstanceOf(AccountLockedException.class);
-
-    // Assert: that the failedloginCount matches the threshold value and sets the lockedUntil value
-    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(failedLoginCountThresholdValue);
-    assertThat(registeredCustomer.getLockedUntil())
-        .isCloseTo(lockedUntil, within(2, ChronoUnit.SECONDS));
-
-    // Assert: that the lockout trigger has been met which justifies an audit record
-    verify(auditLogService, times(1))
-        .recordEvent(
-            ActorType.CUSTOMER,
-            registeredCustomer.getId(),
-            AuditAction.ACCOUNT_LOCKED,
-            "auth",
-            registeredCustomer.getId(),
-            ipAddress);
-  }
-
-  @Test
-  void loginAttemptOnLockedAccount_respondsWithLockedAccountRegardlessIfCredentialsAreValidOrNot() {
-    // Arrange
-    var email = "test@example.com";
-    var rawPassword = "easyPassword!#123";
-    var encodedPassword = "bCrypted_password";
-    var ipAddress = "192.168.0.1";
-    var customerId = UUID.randomUUID();
-    var lockedUntil =
-        Instant.now()
-            .plus(14L, ChronoUnit.MINUTES); // assume one minute has passed since originally set
-
-    var lockedCustomerAccount = new Customer(customerId, email, encodedPassword, false, true);
-    lockedCustomerAccount.setLockedUntil(lockedUntil);
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(lockedCustomerAccount));
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
-        .isInstanceOf(AccountLockedException.class);
-
-    assertThat(lockedCustomerAccount.getLockedUntil())
-        .isCloseTo(lockedUntil, within(2, ChronoUnit.SECONDS));
-
-    // According to Service Logic the account is checked to determine if it is
-    // already locked even before the password is checked so this should NEVER occur
-    verify(passwordEncoder, never()).matches(anyString(), anyString());
-
-    // Assert: a single above-threshold failure is NOT audited -- only the lockout
-    // trigger itself is (see the class Javadoc's reasoning on audit-log noise)
-    verifyNoInteractions(auditLogService);
-  }
-
-  @Test
-  void
-      previouslyLockedAccountLockTimeHasExpired_respondsByResettingFailedLoginCountToZeroAndLockedUntilToNull() {
-    // Arrange
-    var email = "test@example.com";
-    var rawPassword = "easyPassword!#123";
-    var encodedPassword = "bCrypted_password";
-    var ipAddress = "192.168.0.1";
-    var customerId = UUID.randomUUID();
-    var lockedExpireTime = Instant.now().minus(30L, ChronoUnit.SECONDS); // "some" time in the past
-
-    var retryCustomer = new Customer(customerId, email, encodedPassword, true, true);
-    ReflectionTestUtils.setField(retryCustomer, "lockedUntil", lockedExpireTime);
-    var issuedToken =
-        new JwtIssuer.IssuedToken("fake.jwt.token", Instant.now().plus(15L, ChronoUnit.MINUTES));
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(retryCustomer));
-    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
-    when(jwtIssuer.issue(customerId)).thenReturn(issuedToken);
-
-    // Act
-    var response = authService.login(email, rawPassword, ipAddress);
-
-    // Assert: successful login resets both lockout-tracking fields
-    assertThat(retryCustomer.getFailedLoginCount()).isEqualTo(0);
-    assertThat(retryCustomer.getLockedUntil()).isNull();
-  }
-
-  @Test
-  void lockExpiredThenWrongPassword_restartsFailedCountAtOneAndClearsLock() {
-    // Arrange
-    var customerId = UUID.randomUUID();
-    var email = "test@example.com";
-    var wrongPassword = "guessedAtPassword";
-    var encodedPassword = "bCrypted_password";
-    var ipAddress = "192.168.0.1";
-
-    // Deliberately unverified: a wrong password must still be a plain 401, never the
-    // FR-31 "email not verified" 403 -- otherwise the 403 would reveal the account exists
-    // and is unverified to someone who doesn't know the password.
-    var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
-    registeredCustomer.setFailedLoginCount(5); // the max-attempts value from setUp
-    registeredCustomer.setLockedUntil(Instant.now().minus(30L, ChronoUnit.SECONDS));
-
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
-    when(passwordEncoder.matches(wrongPassword, encodedPassword)).thenReturn(false);
-
-    // Act & Assert
-    assertThatThrownBy(() -> authService.login(email, wrongPassword, ipAddress))
-        .isInstanceOf(InvalidCredentialsException.class);
-
-    // Assert: the expired lock was cleared, so this failure counts as attempt one, not a re-lock
-    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(1);
-    assertThat(registeredCustomer.getLockedUntil()).isNull();
-
-    verifyNoInteractions(auditLogService);
-  }
-
-  @Test
-  void unverifiedCustomerCorrectPassword_throwsEmailNotVerifiedAndResetsFailedCount() {
+  void unverifiedCustomer_throwsEmailNotVerifiedAndIssuesNoJwt() {
     // Arrange
     var customerId = UUID.randomUUID();
     var email = "test@example.com";
     var rawPassword = "easyPassword123";
     var encodedPassword = "bCrypted_password";
     var ipAddress = "192.168.0.1";
-    var failedLoginCountThresholdValue = 5;
-
     var registeredCustomer = new Customer(customerId, email, encodedPassword, false, true);
-    registeredCustomer.setFailedLoginCount(failedLoginCountThresholdValue - 1);
 
-    when(customerRepo.findByEmail(email)).thenReturn(Optional.of(registeredCustomer));
-    when(passwordEncoder.matches(rawPassword, encodedPassword)).thenReturn(true);
+    when(credChecker.check(email, rawPassword, ipAddress)).thenReturn(customerId);
+    when(customerRepo.findById(customerId)).thenReturn(Optional.of(registeredCustomer));
 
     // Act & Assert
     assertThatThrownBy(() -> authService.login(email, rawPassword, ipAddress))
         .isInstanceOf(EmailNotVerifiedException.class);
-
-    // provided password was correct so the failed loginCount reset
-    // however, exception was still thrown on lack of email verification
-    assertThat(registeredCustomer.getFailedLoginCount()).isEqualTo(0);
-    assertThat(registeredCustomer.getLockedUntil()).isNull();
 
     verifyNoInteractions(jwtIssuer);
     verifyNoInteractions(auditLogService);
