@@ -116,6 +116,12 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
   }
 
+  @ExceptionHandler(EmailAlreadyVerifiedException.class)
+  public ResponseEntity<ApiError> handleEmailAlreadyVerified(
+      EmailAlreadyVerifiedException ex, HttpServletRequest request) {
+    return body(HttpStatus.CONFLICT, ErrorCode.EMAIL_ALREADY_VERIFIED, ex.getMessage(), request);
+  }
+
   @ExceptionHandler(InvalidVerificationTokenException.class)
   public ResponseEntity<ApiError> handleInvalidVerificationToken(
       InvalidVerificationTokenException ex, HttpServletRequest request) {
@@ -128,6 +134,16 @@ public class GlobalExceptionHandler {
       VerificationTokenExpiredException ex, HttpServletRequest request) {
     return body(
         HttpStatus.BAD_REQUEST, ErrorCode.VERIFICATION_TOKEN_EXPIRED, ex.getMessage(), request);
+  }
+
+  @ExceptionHandler(VerificationResendLimitException.class)
+  public ResponseEntity<ApiError> handleVerificationResendLimit(
+      VerificationResendLimitException ex, HttpServletRequest request) {
+    return body(
+        HttpStatus.TOO_MANY_REQUESTS,
+        ErrorCode.VERIFICATION_RESEND_LIMIT,
+        ex.getMessage(),
+        request);
   }
 
   @ExceptionHandler(InvalidIdempotencyKeyException.class)
