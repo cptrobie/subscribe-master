@@ -103,4 +103,71 @@ class VerificationEmailListenerTest {
             customerId,
             ipAddress);
   }
+
+  @Test
+  void onVerificationEmailRequested_sendSucceeds_sendsVerificationLinkAndAudits() {
+    // Arrange
+    var customerId = UUID.randomUUID();
+    var toEmailAddress = "test@example.com";
+    var ipAddress = "192.168.0.1";
+
+    var requestedEvent =
+        new VerificationEmailRequestedEvent(customerId, toEmailAddress, "aRawToken123", ipAddress);
+
+    // Act
+    emailListener.onVerificationEmailRequested(requestedEvent);
+
+    // Assert
+    var captor = ArgumentCaptor.forClass(OutboundMessage.class);
+    verify(messageService).send(captor.capture());
+    var sent = captor.getValue();
+
+    assertThat(sent.channel()).isEqualTo(MessageChannel.EMAIL);
+    assertThat(sent.recipient()).isEqualTo(toEmailAddress);
+    assertThat(sent.subject()).contains("Subscribe Master");
+    assertThat(sent.body())
+        .contains("http://localhost:8080/api/v1/auth/verify-email?token=aRawToken123")
+        .contains("24 hours");
+
+    verify(auditLogService, times(1))
+        .recordEvent(
+            ActorType.CUSTOMER,
+            customerId,
+            AuditAction.EMAIL_VERIFICATION_SENT,
+            "auth",
+            customerId,
+            ipAddress);
+  }
+
+  @Test
+  void onVerificationEmailRequested_deliveryFails_swallowsExceptionAndAuditsSendFailure() {
+    // Arrange
+    var customerId = UUID.randomUUID();
+    var ipAddress = "192.168.0.1";
+
+    var requestedEvent =
+        new VerificationEmailRequestedEvent(
+            customerId, "test@example.com", "aRawToken123", ipAddress);
+
+    doThrow(
+            new MessageDeliveryException(
+                "email delivery failed", new RuntimeException("smtp down")))
+        .when(messageService)
+        .send(any());
+
+    // Act + Assert -- the failure is swallowed, so the resend can still return 202
+    assertThatCode(() -> emailListener.onVerificationEmailRequested(requestedEvent))
+        .doesNotThrowAnyException();
+
+    // Assert -- a send was attempted and was audited
+    verify(messageService, times(1)).send(any());
+    verify(auditLogService, times(1))
+        .recordEvent(
+            ActorType.CUSTOMER,
+            customerId,
+            AuditAction.EMAIL_VERIFICATION_SEND_FAILED,
+            "auth",
+            customerId,
+            ipAddress);
+  }
 }
