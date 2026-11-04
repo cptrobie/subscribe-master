@@ -13,7 +13,7 @@ sequenceDiagram
     participant AC as AuthController
     participant IS as IdempotencyService
     participant CV as Credential check<br/>(shared with login)
-    participant AS as AuthService.resendVerification
+    participant AS as EmailVerificationService<br/>.resendVerification
     participant DB as PostgreSQL
     participant L as VerificationEmailListener
     participant M as MessageService (email)
@@ -28,7 +28,8 @@ sequenceDiagram
         IS-->>C: 422 IDEMPOTENCY_KEY_MISMATCH
     else no key, or key not seen yet
         Note over IS,DB: transaction T1 begins (key row + operation)
-        IS->>CV: authenticate(email, password, ip)
+        IS->>AS: resendVerification(email, password, newEmail, ip)
+        AS->>CV: check(email, password, ip)
         Note over CV,DB: own transaction (REQUIRES_NEW):<br/>failed-count / lock commits even when it throws
         CV->>DB: find customer, check lock, check password
         alt unknown email or wrong password
@@ -36,14 +37,13 @@ sequenceDiagram
         else locked, or this failure reaches the threshold
             CV-->>C: 429 account locked
         end
-        CV-->>IS: customer id (counters reset)
+        CV-->>AS: customer id (counters reset)
 
-        IS->>AS: resendVerification(customerId, newEmail, ip)
         AS->>DB: reload customer (T1)
         alt already verified
             AS-->>C: 409 EMAIL_ALREADY_VERIFIED
         end
-        AS->>DB: countByCustomerIdAndCreatedAtAfter(now - 1h)
+        AS->>DB: countByCustomerIdAndCreatedAtAfter(now - resend-window)
         alt 3 or more tokens in the last hour
             AS-->>C: 429 VERIFICATION_RESEND_LIMIT
         end
@@ -75,7 +75,7 @@ sequenceDiagram
     end
 ```
 
-Any rejection inside T1 (409 or 429 from `AuthService`) rolls T1 back, so nothing is stored under the key and a retry runs again. The credential check's counter update isn't part of T1, so it survives.
+Any rejection inside T1 (409 or 429 from `EmailVerificationService`) rolls T1 back, so nothing is stored under the key and a retry runs again. The credential check's counter update isn't part of T1, so it survives.
 
 ## Order of checks and their responses
 

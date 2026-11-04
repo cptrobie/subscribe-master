@@ -29,7 +29,10 @@ class VerificationEmailListenerTest {
   private final BrandingProperties brandProps = new BrandingProperties("Subscribe Master");
   private final EmailVerificationProperties verifyProps =
       new EmailVerificationProperties(
-          "http://localhost:8080/api/v1/auth/verify-email", Duration.ofHours(24));
+          "http://localhost:8080/api/v1/auth/verify-email",
+          Duration.ofHours(24),
+          3,
+          Duration.ofHours(1));
   private VerificationEmailListener emailListener;
 
   @BeforeEach

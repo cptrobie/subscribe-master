@@ -11,6 +11,7 @@ import com.acuity.subscribemaster.auth.dto.EmailVerificationResponse;
 import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.support.Tokens;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -18,20 +19,38 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class EmailVerificationServiceTest {
   @Mock private CustomerRepository customerRepo;
+  @Mock private CredentialChecker credChecker;
   @Mock private CustomerEmailVerificationTokenRepository tokenRepo;
+  @Mock private ApplicationEventPublisher eventPublisher;
   @Mock private AuditLogService auditLogService;
+
+  private final EmailVerificationProperties emailVerifyProps =
+      new EmailVerificationProperties(
+          "http://localhost:8080/api/v1/auth/verify-email",
+          Duration.ofHours(24),
+          3,
+          Duration.ofHours(1));
 
   private EmailVerificationService verifyService;
 
   @BeforeEach
   void setUp() {
-    verifyService = new EmailVerificationService(customerRepo, tokenRepo, auditLogService);
+    verifyService =
+        new EmailVerificationService(
+            customerRepo,
+            credChecker,
+            tokenRepo,
+            emailVerifyProps,
+            eventPublisher,
+            auditLogService);
   }
 
   @Test
@@ -228,5 +247,25 @@ class EmailVerificationServiceTest {
     verify(tokenRepo, times(1)).findByTokenHash(any());
     verify(customerRepo, times(1)).findById(any());
     verifyNoInteractions(auditLogService);
+  }
+
+  @Test
+  void issueToken_savesOnlyHashAndExpiresAfterTtl() {
+    // Arrange
+    var customerId = UUID.randomUUID();
+    var now = Instant.parse("2026-11-04T12:00:00Z"); // fixed, so the expiry is exact
+
+    // Act
+    var rawToken = verifyService.issueToken(customerId, now);
+
+    // Assert
+    var tokenCaptor = ArgumentCaptor.forClass(CustomerEmailVerificationToken.class);
+    verify(tokenRepo).save(tokenCaptor.capture());
+    var savedToken = tokenCaptor.getValue();
+
+    assertThat(rawToken).isNotBlank();
+    assertThat(savedToken.getTokenHash()).isEqualTo(Tokens.hash(rawToken)).isNotEqualTo(rawToken);
+    assertThat(savedToken.getCustomerId()).isEqualTo(customerId);
+    assertThat(savedToken.getExpiresAt()).isEqualTo(now.plus(emailVerifyProps.tokenTtl()));
   }
 }

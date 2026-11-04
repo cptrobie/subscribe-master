@@ -9,7 +9,6 @@ import com.acuity.subscribemaster.customer.Customer;
 import com.acuity.subscribemaster.customer.CustomerRepository;
 import com.acuity.subscribemaster.support.EmailMasker;
 import com.acuity.subscribemaster.support.JwtIssuer;
-import com.acuity.subscribemaster.support.Tokens;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,12 +37,13 @@ import org.springframework.transaction.annotation.Transactional;
  * public key needs distributing to verifying modules. See {@link
  * com.acuity.subscribemaster.support.JwtIssuer} for the actual signing logic.
  *
- * <p><b>Email verification (FR-30).</b> Registration generates a random token, saves only its hash
- * ({@link CustomerEmailVerificationToken}, expiring after {@code app.email-verification.token-ttl})
- * and publishes a {@link CustomerRegisteredEvent} -- all inside the registration transaction, so
- * the customer and token are saved together or not at all. The email itself is sent by {@link
+ * <p><b>Email verification (FR-30).</b> Registration has {@link EmailVerificationService} issue the
+ * verification token -- the same code the FR-40 resend uses -- and publishes a {@link
+ * CustomerRegisteredEvent} with the raw token it returns, all inside the registration transaction,
+ * so the customer and token are saved together or not at all. The email itself is sent by {@link
  * VerificationEmailListener} only after that transaction commits, and a failed send doesn't fail
- * registration. Confirming the link is {@link EmailVerificationService}'s job, not this class's.
+ * registration. Confirming and resending the link are {@link EmailVerificationService}'s job, not
+ * this class's.
  *
  * <p><b>Login is blocked until the email is verified (FR-31).</b> An unverified account with the
  * correct password gets a distinct {@link EmailNotVerifiedException} (403), so a genuine user knows
@@ -66,11 +66,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
   private final CustomerRepository customerRepo;
+  private final EmailVerificationService emailVerifyService;
   private final JwtIssuer jwtIssuer;
   private final PasswordEncoder pwdEncoder;
   private final CredentialChecker credChecker;
-  private final CustomerEmailVerificationTokenRepository emailVerifyTokenRepo;
-  private final EmailVerificationProperties emailVerifyProps;
   private final ApplicationEventPublisher events;
   private final AuditLogService auditLogService;
 
@@ -78,19 +77,17 @@ public class AuthService {
 
   public AuthService(
       CustomerRepository customerRepository,
+      EmailVerificationService emailVerificationService,
       JwtIssuer jwtIssuer,
       PasswordEncoder passwordEncoder,
       CredentialChecker credentialChecker,
-      CustomerEmailVerificationTokenRepository customerEmailVerificationTokenRepository,
-      EmailVerificationProperties emailVerificationProperties,
       ApplicationEventPublisher eventPublisher,
       AuditLogService auditLogService) {
     this.customerRepo = customerRepository;
+    this.emailVerifyService = emailVerificationService;
     this.jwtIssuer = jwtIssuer;
     this.pwdEncoder = passwordEncoder;
     this.credChecker = credentialChecker;
-    this.emailVerifyTokenRepo = customerEmailVerificationTokenRepository;
-    this.emailVerifyProps = emailVerificationProperties;
     this.events = eventPublisher;
     this.auditLogService = auditLogService;
   }
@@ -126,34 +123,20 @@ public class AuthService {
     // collapses retries that share a key, so two different keys (or none) for the same email
     // can still race here.
     var customer = customerRepo.saveAndFlush(new Customer(email, pwdEncoder.encode(password)));
+    var customerId = customer.getId();
 
     auditLogService.recordEvent(
-        ActorType.CUSTOMER,
-        customer.getId(),
-        AuditAction.REGISTERED,
-        "auth",
-        customer.getId(),
-        ipAddress);
+        ActorType.CUSTOMER, customerId, AuditAction.REGISTERED, "auth", customerId, ipAddress);
 
-    var rawToken = Tokens.generate();
-    var emailVerifyToken =
-        new CustomerEmailVerificationToken(
-            customer.getId(),
-            Tokens.hash(rawToken),
-            Instant.now().plus(emailVerifyProps.tokenTtl()));
-
-    emailVerifyTokenRepo.save(emailVerifyToken);
+    var rawToken = emailVerifyService.issueToken(customerId, Instant.now());
 
     events.publishEvent(
-        new CustomerRegisteredEvent(customer.getId(), customer.getEmail(), rawToken, ipAddress));
+        new CustomerRegisteredEvent(customerId, customer.getEmail(), rawToken, ipAddress));
 
-    logger.info("customer {} registered.", customer.getId());
+    logger.info("customer {} registered.", customerId);
 
     return RegistrationResponse.accepted(
-        customer.getId(),
-        customer.getEmail(),
-        customer.getIsEmailVerified(),
-        customer.getCreatedAt());
+        customerId, customer.getEmail(), customer.getIsEmailVerified(), customer.getCreatedAt());
   }
 
   public LoginResponse login(String email, String password, String ipAddress) {
