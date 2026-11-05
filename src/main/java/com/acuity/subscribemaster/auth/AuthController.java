@@ -5,6 +5,8 @@ import com.acuity.subscribemaster.auth.dto.LoginRequest;
 import com.acuity.subscribemaster.auth.dto.LoginResponse;
 import com.acuity.subscribemaster.auth.dto.RegistrationRequest;
 import com.acuity.subscribemaster.auth.dto.RegistrationResponse;
+import com.acuity.subscribemaster.auth.dto.ResendVerificationRequest;
+import com.acuity.subscribemaster.auth.dto.ResendVerificationResponse;
 import com.acuity.subscribemaster.error.ApiError;
 import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,8 +26,10 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Unauthenticated public endpoints for gaining access to the system (FR-01: registration, FR-02:
- * login, FR-30: email verification). Stays thin per NFR-01 -- all real logic lives in {@link
- * AuthService} and {@link EmailVerificationService}.
+ * login, FR-30: email verification, FR-40: resending the verification email). Registration and
+ * resend accept an optional {@code Idempotency-Key} (NFR-33), each under its own endpoint constant,
+ * so the same key on both is two separate entries. Stays thin per NFR-01 -- all real logic lives in
+ * {@link AuthService} and {@link EmailVerificationService}.
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -33,6 +37,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
   public static final String REGISTER_ENDPOINT = "POST /api/v1/auth/register";
+  public static final String RESEND_ENDPOINT = "POST /api/v1/auth/resend-verification";
 
   private final AuthService authService;
   private final EmailVerificationService verifyService;
@@ -143,10 +148,19 @@ public class AuthController {
     return ResponseEntity.ok(response);
   }
 
+  /**
+   * Confirms a customer's email address from the token in their verification link -- the one sent
+   * at registration or, after a resend (FR-40), the newest one; a resend marks earlier links used.
+   *
+   * <p><b>The token arrives in the URL query string.</b> Never log the request URL, the query
+   * string or the {@code token} parameter here, and keep it out of any request-logging filter added
+   * later -- a logged token is a working verification link until it's used or expires. Only its
+   * hash is ever looked up ({@link EmailVerificationService}).
+   */
   @Operation(
       summary = "Verify an email address",
       description =
-          "Confirms the email address from the link sent at registration. Safe to repeat: "
+          "Confirms the email address from the link in the verification email. Safe to repeat: "
               + "an already-used link returns 200 \"Email already verified.\"")
   @ApiResponses({
     @ApiResponse(
@@ -158,18 +172,84 @@ public class AuthController {
         description = "Invalid, expired or missing verification token",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
-  /**
-   * Confirms a customer's email address from the token in their verification link.
-   *
-   * <p><b>The token arrives in the URL query string.</b> Never log the request URL, the query
-   * string or the {@code token} parameter here, and keep it out of any request-logging filter added
-   * later -- a logged token is a working verification link until it's used or expires. Only its
-   * hash is ever looked up ({@link EmailVerificationService}).
-   */
   @GetMapping(path = "/verify-email", produces = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<EmailVerificationResponse> verifyEmail(
       @RequestParam(name = "token") String token, HttpServletRequest httpRequest) {
     var response = verifyService.verify(token, httpRequest.getRemoteAddr());
     return ResponseEntity.ok(response);
+  }
+
+  @Operation(
+      summary = "Resend the verification email",
+      description =
+          "Sends a new verification link to an unverified account, optionally to a corrected"
+              + " address (newEmail). The account's password is required. Earlier links stop"
+              + " working. Limited to a few requests per account per hour.")
+  @ApiResponses({
+    @ApiResponse(
+        responseCode = "202",
+        description =
+            "Verification email queued, or the original response replayed for a retried Idempotency-Key",
+        headers =
+            @Header(
+                name = "Idempotent-Replayed",
+                description = "Present and \"true\" only when this response is a replay",
+                schema = @Schema(type = "string", allowableValues = "true")),
+        content = @Content(schema = @Schema(implementation = ResendVerificationResponse.class))),
+    @ApiResponse(
+        responseCode = "400",
+        description =
+            "Body validation failure, or an Idempotency-Key that is blank or longer than "
+                + IdempotencyService.MAX_KEY_LENGTH
+                + " characters",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "401",
+        description = "Invalid email or password",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "409",
+        description =
+            "The account's email address is already verified, or newEmail belongs to another account",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "422",
+        description = "Idempotency-Key already used with a different request body",
+        content = @Content(schema = @Schema(implementation = ApiError.class))),
+    @ApiResponse(
+        responseCode = "429",
+        description =
+            "Account locked after too many failed attempts, or too many verification emails requested recently",
+        content = @Content(schema = @Schema(implementation = ApiError.class)))
+  })
+  @PostMapping(
+      path = "/resend-verification",
+      consumes = MediaType.APPLICATION_JSON_VALUE,
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<ResendVerificationResponse> resendVerification(
+      @Parameter(
+              description =
+                  "Optional. A unique value per resend attempt (e.g. a UUID)."
+                      + " A retry with the same key and body replays the original"
+                      + " response instead of sending another email.",
+              schema = @Schema(maxLength = IdempotencyService.MAX_KEY_LENGTH))
+          @RequestHeader(name = "Idempotency-Key", required = false)
+          String idempotencyKey,
+      @Valid @RequestBody ResendVerificationRequest request,
+      HttpServletRequest httpRequest) {
+    return idemService.execute(
+        idempotencyKey,
+        RESEND_ENDPOINT,
+        request,
+        ResendVerificationResponse.class,
+        () -> {
+          var response =
+              verifyService.resendVerification(
+                  request.email(),
+                  request.password(),
+                  request.newEmail(),
+                  httpRequest.getRemoteAddr());
+          return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        });
   }
 }
