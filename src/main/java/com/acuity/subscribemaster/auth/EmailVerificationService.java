@@ -24,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
  * used, for a customer who's already verified, is treated as success ("already verified")
  * <i>before</i> expiry is checked: link scanners (e.g. Outlook Safe Links) often open the link
  * first, and the customer's own click -- possibly after the window has passed -- must not then see
- * an error. A used token for an unverified customer can't arise through this code (both are set in
- * one transaction), so it's rejected and logged as an anomaly rather than reported as verified.
+ * an error. A used token for an unverified customer is a link a resend has superseded -- it marks
+ * every earlier token used so only the newest works -- so it's rejected as invalid, not reported as
+ * verified. That's an ordinary outcome (a customer clicking an older email), logged at {@code
+ * info}.
  *
  * <p>Failures throw {@link InvalidVerificationTokenException} (unknown token, missing customer,
  * inconsistent state -- all just "this link doesn't work" to the user) or {@link
@@ -102,8 +104,8 @@ class EmailVerificationService {
         logger.info("customer {} verification link reused", emailVerifyToken.getCustomerId());
         return EmailVerificationResponse.alreadyVerified();
       }
-      logger.warn(
-          "verification rejected for customer {}: token used but email not verified",
+      logger.info(
+          "verification rejected for customer {}: link superseded by a resend",
           emailVerifyToken.getCustomerId());
       throw new InvalidVerificationTokenException();
     }
