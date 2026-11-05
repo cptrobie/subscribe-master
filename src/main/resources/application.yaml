@@ -81,6 +81,8 @@ app:
   email-verification:
     link-base-url: http://localhost:8080/api/v1/auth/verify-email
     token-ttl: PT24H
+    resend-limit: 3
+    resend-window: PT1H
 
   payment:
     retry:
