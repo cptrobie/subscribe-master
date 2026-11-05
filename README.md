@@ -92,24 +92,54 @@ This project started from a take-home assignment brief and has since grown into 
 
 ```
 .
-├── src/main/resources/db/migration/     # Flyway schema + seed migrations (source of truth for the DB)
-├── src/main/resources/local-dev-keys/   # Locally-generated JWT signing key pair -- gitignored, see "Vault bootstrap" below
-├── src/test/resources/test-jwt-keys/    # Dedicated test-only JWT key pair -- committed (disposable fixture, never a real credential)
-├── scripts/                             # One-time and recurring project-management scripts (see each subfolder)
-├── design-docs/                         # Design docs ahead of formal requirements (sequence/flow diagrams, key decisions)
+├── src/main/java/com/acuity/subscribemaster/  # Application code, one package per domain (entry point: SubscribeMasterApplication)
+│   ├── auth/                                  # Registration, login (JWT), credential checks, email verification + resend (FR-30, FR-40)
+│   │   └── dto/                               # Auth request/response records (registration, login, verification, resend)
+│   ├── customer/                              # Customer entity and repository
+│   ├── subscribe/                             # Provider catalog, customer subscriptions, status transitions, subscription REST API
+│   │   └── dto/                               # Subscription request/response records
+│   ├── payment/                               # Payment attempts, payment history, refunds, payment REST API
+│   │   └── dto/                               # Payment request/response records
+│   ├── idempotency/                           # Idempotency-Key handling: stored keys, request hashing, replay (NFR-33)
+│   ├── auditlog/                              # Audit log entity, audit actions and actor types, audit service
+│   ├── notifylog/                             # Notification log of messages sent to customers
+│   ├── message/                               # Channel-agnostic outbound messaging API (MessageService, OutboundMessage)
+│   │   ├── email/                             # SMTP email sender and its properties
+│   │   └── internal/                          # Dispatcher and per-channel sender strategy -- internal to the module
+│   ├── error/                                 # Error codes, API error body, global exception handler
+│   ├── config/                                # Spring Security and OpenAPI configuration
+│   └── support/                               # Shared helpers: JWT issuing, PEM keys, tokens, email masking, branding, common exceptions
+├── src/main/resources/
+│   ├── application*.yaml                      # Base config plus dev and prod profiles
+│   ├── db/migration/                          # Flyway schema + seed migrations, V1–V11 + repeatable catalog seed (source of truth for the DB)
+│   └── local-dev-keys/                        # Locally-generated JWT signing key pair -- gitignored, see "Getting started" step 5
+├── src/test/java/com/acuity/subscribemaster/  # Unit and integration tests (Testcontainers), mirroring the main packages
+├── src/test/resources/test-jwt-keys/          # Dedicated test-only JWT key pair -- committed (disposable fixture, never a real credential)
+├── scripts/                                   # Project-management scripts for GitHub issues (bash + gh)
+│   ├── one_time/                              # One-off scripts: issue creation, body fixes, domain tagging, wave rebalances, NFR additions
+│   ├── issue_hygiene/                         # Recurring checks, e.g. every issue has exactly one domain:* label
+│   └── time_tracking/                         # Per-issue time totals vs. estimate, and a whole-project time report
+├── design-docs/                               # Design docs ahead of formal requirements (sequence/flow diagrams, key decisions)
+│   ├── actuator_observability.md
 │   ├── contact_preferences_and_sms.md
 │   ├── login_2fa_sequence.md
 │   ├── payment_retry_and_dunning.md
 │   ├── provider_catalog_management.md
+│   ├── resend_verification_sequence.md
 │   ├── staff_authorization_design.md
 │   ├── subscription_status_transitions.md
 │   └── white_label_branding_and_multipart_email.md
-├── subscribe_master_erd.drawio          # Entity-relationship diagram (open in draw.io / app.diagrams.net)
-├── compose.yaml                         # Local Postgres + Vault (dev mode) + Mailpit
-├── ARCHITECTURE.md                      # Design decisions, dev/ops guidance
-├── subscribe_master_requirements.md     # Functional/non-functional requirements, with schema coverage status
-├── IMPLEMENTATION_BACKLOG.md            # GitHub issue backlog, wave-based prioritization, sizing
-└── COMMON_QUERIES.md                    # Reference SQL for common tasks
+├── .github/workflows/                         # GitHub Actions CI: ./mvnw verify (unit + integration tests)
+├── pom.xml, mvnw, .mvn/                       # Maven build and Maven wrapper
+├── compose.yaml                               # Local Postgres + Vault (dev mode) + Mailpit
+├── subscribe_master_erd.drawio                # Entity-relationship diagram (open in draw.io / app.diagrams.net)
+├── ARCHITECTURE.md                            # Design decisions, dev/ops guidance
+├── subscribe_master_requirements.md           # Functional/non-functional requirements, with schema coverage status
+├── IMPLEMENTATION_BACKLOG.md                  # GitHub issue backlog, wave-based prioritization, sizing
+├── COMMON_QUERIES.md                          # Reference SQL for common tasks
+├── FUTURE_RELEASES.md                         # Parking lot for out-of-scope features and extensions
+├── load_testing_open_questions.md             # Open load/performance-testing questions (not yet a formal NFR)
+└── PRESENTATION_OUTLINE.md                    # Slide-by-slide outline for presenting the project
 ```
 
 ---
@@ -130,6 +160,8 @@ This project started from a take-home assignment brief and has since grown into 
 | `design-docs/provider_catalog_management.md` | Staff-managed subscription provider catalog |
 | `design-docs/staff_authorization_design.md` | Staff authentication and permission-based authorization |
 | `design-docs/white_label_branding_and_multipart_email.md` | Draft: per-deployment white-label branding, and the future plain-text → multipart (text + HTML) email refactor |
+| `design-docs/actuator_observability.md` | Actuator baseline, health model, metrics contract and observability wave placement — `NFR-36`–`NFR-42` |
+| `design-docs/resend_verification_sequence.md` | Sequence and flow diagrams, and the 9 settled decisions, for resending the verification email — `FR-40` |
 
 
 ---
