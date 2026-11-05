@@ -722,6 +722,300 @@ public class AuthControllerIT {
     assertThat(greenMail.getReceivedMessagesForDomain(email)).hasSize(1);
   }
 
+  // --- FR-40: resend verification email ---
+
+  @Test
+  void resend_oldLinkStopsWorking_newLinkVerifies() throws Exception {
+    // Arrange -- register, and keep the first link
+    var email = "resend.oldlink@example.com";
+    var rawPassword = "easyPassword!#123";
+    registerWithoutKey(email, rawPassword);
+    greenMail.waitForIncomingEmail(5000, 1);
+    var firstToken = tokenFrom(greenMail.getReceivedMessages()[0]);
+
+    // Act
+    var response =
+        resend(
+            new ResendVerificationRequest(email, rawPassword, null),
+            null,
+            ResendVerificationResponse.class);
+
+    // Assert -- accepted, and a second, different link went to the same address
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(response.getBody()).isEqualTo(ResendVerificationResponse.sentTo(email));
+
+    assertThat(greenMail.waitForIncomingEmail(5000, 2)).isTrue();
+    var resent = greenMail.getReceivedMessages()[1];
+    assertThat(resent.getAllRecipients()[0].toString()).isEqualTo(email);
+    var secondToken = tokenFrom(resent);
+    assertThat(secondToken).isNotEqualTo(firstToken);
+
+    // Assert -- the superseded link is refused...
+    var oldLink =
+        restTemplate.getForEntity(
+            "/api/v1/auth/verify-email?token={token}", ApiError.class, firstToken);
+    assertThat(oldLink.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(oldLink.getBody()).isNotNull();
+    assertThat(oldLink.getBody().code()).isEqualTo(ErrorCode.INVALID_VERIFICATION_TOKEN.name());
+
+    // ...and the new one verifies the account
+    var newLink =
+        restTemplate.getForEntity(
+            "/api/v1/auth/verify-email?token={token}",
+            EmailVerificationResponse.class,
+            secondToken);
+    assertThat(newLink.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(newLink.getBody()).isEqualTo(EmailVerificationResponse.verified());
+    assertThat(customerRepo.findByEmail(email).orElseThrow().getIsEmailVerified()).isTrue();
+  }
+
+  @Test
+  void resend_newEmail_changesAddressSendsToNewAndAudits() throws Exception {
+    // Arrange
+    var email = "resend.typo@exmaple.com";
+    var newEmail = "resend.fixed@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+
+    // Act
+    var response =
+        resend(
+            new ResendVerificationRequest(email, rawPassword, newEmail),
+            null,
+            ResendVerificationResponse.class);
+
+    // Assert -- the response and the new link both go to the corrected address
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(response.getBody()).isEqualTo(ResendVerificationResponse.sentTo(newEmail));
+
+    assertThat(greenMail.waitForIncomingEmail(5000, 2)).isTrue();
+    var resent = greenMail.getReceivedMessages()[1];
+    assertThat(resent.getAllRecipients()[0].toString()).isEqualTo(newEmail);
+
+    // Assert -- the address change was saved and audited
+    assertThat(customerRepo.findByEmail(newEmail).orElseThrow().getId()).isEqualTo(customerId);
+    assertThat(customerRepo.findByEmail(email)).isEmpty();
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.EMAIL_CHANGED))
+        .hasSize(1);
+
+    // Assert -- the new link verifies the account under its new address
+    var newLink =
+        restTemplate.getForEntity(
+            "/api/v1/auth/verify-email?token={token}",
+            EmailVerificationResponse.class,
+            tokenFrom(resent));
+    assertThat(newLink.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(customerRepo.findById(customerId).orElseThrow().getIsEmailVerified()).isTrue();
+  }
+
+  @Test
+  void resend_wrongPasswordWithFreshKeys_stillLocksAccount() {
+    // Arrange
+    var email = "resend.lockout@example.com";
+    var rawPassword = "easyPassword!#123";
+    var wrongPassword = "wrongPassword!#123";
+    registerWithoutKey(email, rawPassword);
+    var badRequest = new ResendVerificationRequest(email, wrongPassword, null);
+
+    // Act + Assert -- a new Idempotency-Key per guess must not reset or dodge the lockout
+    for (int attempt = 1; attempt < maxLoginAttempts; attempt++) {
+      var key = UUID.randomUUID().toString();
+      var response = resend(badRequest, key, ApiError.class);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+      assertThat(response.getBody()).isNotNull();
+      assertThat(response.getBody().code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS.name());
+      // a rejected request stores nothing under its key
+      assertThat(idemRepo.findById(new IdempotencyPk(key, AuthController.RESEND_ENDPOINT)))
+          .isEmpty();
+    }
+
+    var lockingResponse = resend(badRequest, UUID.randomUUID().toString(), ApiError.class);
+    assertThat(lockingResponse.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(lockingResponse.getBody()).isNotNull();
+    assertThat(lockingResponse.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
+
+    // Assert -- the failed count was committed even though each resend rolled back
+    var lockedCustomer = customerRepo.findByEmail(email).orElseThrow();
+    assertThat(lockedCustomer.getFailedLoginCount()).isEqualTo(maxLoginAttempts);
+    assertThat(lockedCustomer.getLockedUntil()).isNotNull();
+
+    // Assert -- while locked, even the correct password can't resend
+    var correctPassword =
+        resend(
+            new ResendVerificationRequest(email, rawPassword, null),
+            UUID.randomUUID().toString(),
+            ApiError.class);
+    assertThat(correctPassword.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(correctPassword.getBody()).isNotNull();
+    assertThat(correctPassword.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
+  }
+
+  @Test
+  void resend_thirdWithinWindowOfRegistration_returnsRateLimit() {
+    // Arrange -- the registration token counts toward the limit
+    var email = "resend.ratelimit@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+    var request = new ResendVerificationRequest(email, rawPassword, null);
+
+    // Act + Assert -- registration plus two resends reaches the limit of three
+    assertThat(resend(request, null, ResendVerificationResponse.class).getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(resend(request, null, ResendVerificationResponse.class).getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+
+    var limited = resend(request, null, ApiError.class);
+    assertThat(limited.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(limited.getBody()).isNotNull();
+    assertThat(limited.getBody().code()).isEqualTo(ErrorCode.VERIFICATION_RESEND_LIMIT.name());
+
+    // Assert -- the refused request issued and sent nothing
+    assertThat(tokensFor(customerId)).hasSize(3);
+    greenMail.waitForIncomingEmail(5000, 3);
+    assertThat(greenMail.getReceivedMessages()).hasSize(3);
+  }
+
+  @Test
+  void resend_alreadyVerified_returnsConflict() throws Exception {
+    // Arrange -- register and verify
+    var email = "resend.verified@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+    greenMail.waitForIncomingEmail(5000, 1);
+    restTemplate.getForEntity(
+        "/api/v1/auth/verify-email?token={token}",
+        EmailVerificationResponse.class,
+        tokenFrom(greenMail.getReceivedMessages()[0]));
+
+    // Act
+    var response =
+        resend(new ResendVerificationRequest(email, rawPassword, null), null, ApiError.class);
+
+    // Assert
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.EMAIL_ALREADY_VERIFIED.name());
+    assertThat(tokensFor(customerId)).hasSize(1);
+  }
+
+  @Test
+  void resend_newEmailTaken_returnsConflictAndChangesNothing() {
+    // Arrange -- two accounts; the first tries to move onto the second's address
+    var email = "resend.mover@example.com";
+    var takenEmail = "resend.taken@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+    registerWithoutKey(takenEmail, rawPassword);
+
+    // Act
+    var response =
+        resend(new ResendVerificationRequest(email, rawPassword, takenEmail), null, ApiError.class);
+
+    // Assert -- refused, and the first account is exactly as it was
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_ALREADY_EXISTS.name());
+
+    assertThat(customerRepo.findById(customerId).orElseThrow().getEmail()).isEqualTo(email);
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.EMAIL_CHANGED))
+        .isEmpty();
+    assertThat(tokensFor(customerId)).hasSize(1);
+  }
+
+  @Test
+  void resend_sameKeyAfterEmailChange_replaysWithoutResending() {
+    // Arrange
+    var email = "resend.replay@exmaple.com";
+    var newEmail = "resend.replayed@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+    var key = UUID.randomUUID().toString();
+    var request = new ResendVerificationRequest(email, rawPassword, newEmail);
+
+    // Act -- the retry's body still names the old address, which no longer exists, so a
+    // re-run would fail the credential check; it must be replayed instead
+    var original = resend(request, key, ResendVerificationResponse.class);
+    var retry = resend(request, key, ResendVerificationResponse.class);
+
+    // Assert
+    assertThat(original.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(original.getHeaders().getFirst(REPLAYED_HEADER)).isNull();
+    assertThat(retry.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(retry.getHeaders().getFirst(REPLAYED_HEADER)).isEqualTo("true");
+    assertThat(retry.getBody()).isEqualTo(original.getBody());
+
+    // Assert -- the change and the email happened once
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.EMAIL_CHANGED))
+        .hasSize(1);
+    assertThat(tokensFor(customerId)).hasSize(2);
+    greenMail.waitForIncomingEmail(5000, 2);
+    assertThat(greenMail.getReceivedMessages()).hasSize(2);
+  }
+
+  @Test
+  void resend_newEmailSameAddressDifferentCaseOrBlank_changesNothing() {
+    // Arrange
+    var email = "resend.normalize@example.com";
+    var rawPassword = "easyPassword!#123";
+    var customerId = registerWithoutKey(email, rawPassword);
+
+    // Act -- a padded, upper-cased copy of the current address, then a blank one
+    var sameAddress =
+        resend(
+            new ResendVerificationRequest(email, rawPassword, "  " + email.toUpperCase() + " "),
+            null,
+            ResendVerificationResponse.class);
+    var blank =
+        resend(
+            new ResendVerificationRequest(email, rawPassword, "   "),
+            null,
+            ResendVerificationResponse.class);
+
+    // Assert -- both resend to the current address, with no address change
+    assertThat(sameAddress.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(sameAddress.getBody()).isEqualTo(ResendVerificationResponse.sentTo(email));
+    assertThat(blank.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(blank.getBody()).isEqualTo(ResendVerificationResponse.sentTo(email));
+
+    assertThat(customerRepo.findById(customerId).orElseThrow().getEmail()).isEqualTo(email);
+    assertThat(auditLogRepo.findByActorIdAndAction(customerId, AuditAction.EMAIL_CHANGED))
+        .isEmpty();
+  }
+
+  /** Registers without an Idempotency-Key and returns the new customer's id. */
+  private UUID registerWithoutKey(String email, String rawPassword) {
+    var response =
+        restTemplate.postForEntity(
+            "/api/v1/auth/register",
+            new RegistrationRequest(email, rawPassword),
+            RegistrationResponse.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    return response.getBody().id();
+  }
+
+  /** Posts a resend, sending the Idempotency-Key header only when {@code key} isn't null. */
+  private <T> ResponseEntity<T> resend(
+      ResendVerificationRequest request, String key, Class<T> type) {
+    var headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    if (key != null) {
+      headers.set("Idempotency-Key", key);
+    }
+    return restTemplate.postForEntity(
+        "/api/v1/auth/resend-verification", new HttpEntity<>(request, headers), type);
+  }
+
+  /** Pulls the raw token out of a verification email's link. */
+  private static String tokenFrom(MimeMessage mail) throws Exception {
+    var matcher = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher((String) mail.getContent());
+    assertThat(matcher.find()).isTrue();
+    return matcher.group(1);
+  }
+
+  private List<CustomerEmailVerificationToken> tokensFor(UUID customerId) {
+    return tokenRepo.findAll().stream().filter(t -> t.getCustomerId().equals(customerId)).toList();
+  }
+
   private <T> ResponseEntity<T> register(RegistrationRequest request, String key, Class<T> type) {
     var headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
