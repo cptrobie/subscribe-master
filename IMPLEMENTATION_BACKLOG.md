@@ -181,7 +181,7 @@ Rebalanced on 2026-10-23, when Wave 8 would otherwise have reached 128h. Estimat
 
 | Wave | Hours | | Wave | Hours |
 |---|---|---|---|---|
-| 1 (in progress) | 92 | | 6 | 60 |
+| 1 (complete) | 92 | | 6 | 60 |
 | 2 | 68 | | 7 | 52 |
 | 4 | 36 | | 8 | 64 |
 | 4.5 | 68 | | 9 | 64 |
@@ -253,12 +253,12 @@ Example of a paused wave with an optional resumption note:
 
 ---
 
-## Wave 1 — Authentication core 🚧 In progress
-*(Started 10/SEP/2026 — beginning with FR-01, registration.)*
+## Wave 1 — Authentication core ✅ Complete (verified via CI)
+
+**Rollup: estimated 92h · actual 79h 50m (12h 10m under, 13%)**
+*(Started 10/SEP/2026 with FR-01. Paused for Wave 3 after the core auth work, then resumed for FR-30 onwards; closed 05/NOV/2026 when FR-40 merged in PR #139.)*
 
 **Rationale:** every other feature is scoped to "the logged-in customer" or "the authorized staff member" — nothing downstream can be meaningfully built or tested without login working first.
-
-**FR-30, FR-31, NFR-34 and NFR-33 are complete; FR-40 remains open.** This wave's core purpose — working, tested auth (registration, login, session/JWT verification) — was done before Wave 3 started, and FR-30 (email verification) was picked back up after Wave 3 closed, followed by FR-31 (login blocked until verified). Two pieces were split out of FR-30 during implementation to keep it reviewable: registration idempotency (`NFR-33`) and resending the verification email (`FR-40`) — the latter now more pressing, since an unverified customer whose email never arrived can no longer log in. `NFR-34` (auditing a failed verification send) was added afterward as a small follow-on to `FR-30`. This note stays until the wave closes.
 
 - `[FR-01] User registration endpoint (/api/v1/auth/register)` — **[S]**
 - `[FR-02] User login endpoint (/api/v1/auth/login)` — **[M]** — includes failed-login lockout (5 attempts/15min) and the `/api/v1` retrofit for `FR-01`/`FR-02` (`NFR-25`)
