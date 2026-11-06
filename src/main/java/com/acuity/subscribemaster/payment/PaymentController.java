@@ -9,9 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,8 +18,8 @@ import org.springframework.web.bind.annotation.*;
  * REST endpoints under {@code /api/v1/payment}.
  *
  * <p>Only {@code GET /{id}} is implemented (delegates to {@link PaymentService#getPaymentById}).
- * {@code POST /register} is a placeholder stub that currently returns {@code null}; making a
- * payment is not yet wired up.
+ * {@code POST /register} is a placeholder stub that currently “throws UnsupportedOperationException
+ * until FR-12”.
  */
 @Hidden // Wave 6 scaffolding -- excluded from the OpenAPI spec until FR-12 is picked up
 @RestController
@@ -52,13 +50,10 @@ public class PaymentController {
         description = "Payment not found",
         content = @Content(schema = @Schema(implementation = ApiError.class)))
   })
-  @GetMapping(
-      path = "/{id}",
-      consumes = MediaType.APPLICATION_JSON_VALUE,
-      produces = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<PaymentResponse> getPayment(@Valid @PathVariable UUID id) {
+  @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<PaymentResponse> getPayment(@PathVariable UUID id) {
     var response = paymentService.getPaymentById(id);
-    return ResponseEntity.status(HttpStatus.OK).body(response);
+    return ResponseEntity.ok(response);
   }
 
   @Operation(
@@ -74,7 +69,8 @@ public class PaymentController {
       path = "/register",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<PaymentResponse> foo() {
-    return null;
+  public ResponseEntity<PaymentResponse> createPayment() {
+    throw new UnsupportedOperationException(
+        "Payment creation is FR-12 (Wave 6); not implemented yet");
   }
 }

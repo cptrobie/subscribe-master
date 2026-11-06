@@ -68,7 +68,7 @@ public class CustomerSubscription {
   @Column(name = "billing_interval_days")
   private Integer billingIntervalDays;
 
-  @Column(name = "next_payment_date", nullable = false)
+  @Column(name = "next_payment_date")
   private LocalDate nextPaymentDate;
 
   @Enumerated(EnumType.STRING)

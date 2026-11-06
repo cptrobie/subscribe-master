@@ -102,20 +102,6 @@ public class AuthService {
       throw duplicateEmailDetected(email, ipAddress);
     }
 
-    // TODO: Commenting out now because its not in scope however when we add idempotency it may
-    // resurface. If at that time its still not needed we can make decision to remove or retain
-    //
-    /*
-     Customer customer;
-    try {
-    customer = customerRepo.saveAndFlush(new Customer(email, pwdEncoder.encode(password)));
-    } catch (DataIntegrityViolationException e) {
-      // Lost a race with a concurrent registration for the same email between the
-      // existsByEmail check above and this insert -- the DB's citext unique
-      // constraint is the actual source of truth here.
-      throw duplicateEmailRaceLost(ipAddress);
-    }
-     */
     // TODO: a concurrent registration for the same email could still land between the
     // existsByEmail check above and this insert -- the DB's citext unique constraint would
     // catch it, but it would currently surface as a raw, unhandled exception rather than a
@@ -185,22 +171,6 @@ public class AuthService {
     return new AccountAlreadyExistsException();
   }
 
-  // TODO: Commenting out now because its not in scope however when we add idempotency it may
-  // resurface. If at that time its still not needed we can make decision to remove or retain
-  //
-  /**
-   * existsByEmail missed it -- a concurrent registration for the same email won the race -- and the
-   * DB's citext unique constraint caught it instead. No authenticated actor exists in this public
-   * endpoint, and unlike {@link #duplicateEmailDetected}, it wasn't application logic that caught
-   * this one; attributed to "system"/{@link #SYSTEM_ACTOR_ID} rather than the customer that
-   * happened to win the race, who had no involvement in this request.
-   *
-   * <p>Deliberately does NOT look up the existing customer for resourceId: saveAndFlush's failure
-   * already poisoned the current transaction (Postgres aborts the whole transaction on any failed
-   * statement), so any further query on customerRepo here -- still the same transaction -- would
-   * itself fail with a second, uncaught exception. Fixing that properly needs a savepoint
-   * (PROPAGATION_NESTED) around the original insert; out of scope for now, so resourceId is null.
-   */
   /*
   private UserAlreadyExistsException duplicateEmailRaceLost(String ipAddress) {
     auditLogService.recordEvent(
