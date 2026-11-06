@@ -289,7 +289,7 @@ Example of a paused wave with an optional resumption note:
 ## Wave 3 — Subscription management core ✅ Complete (verified via CI)
 
 **Rollup: estimated 32h · actual 42h 30m (10h 30m over, 33%)**
-*(The 32h estimate is the report's, which uses each issue's own `Estimate:` comment where one exists; the size labels below add up to 40h.)*
+*(The 32h estimate is the report's, which uses each issue's own `Estimate:` comment where one exists; the size markers below add up to 40h because `FR-09` is **[M]** here but `size-S` (~4h) on its issue, #20.)*
 
 **Rationale:** the core domain object everything else (payments, statistics, reports) hangs off of. Optimistic locking is introduced here specifically because this is the first mutable, multi-writer entity in the system.
 
@@ -326,7 +326,7 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-27] Module boundary enforcement tooling (Spring Modulith verification)` — **[M]** **(standing)**
 - `[NFR-28] Event-driven cross-module communication convention` — **[M]** **(standing)**
 - `[NFR-29] Domain-partitioned database schema` — **[L]** **(standing)**
-- `[NFR-30] Domain metadata (\`domain:*\` labels) on GitHub issues` — **[S]**
+- `[NFR-30] Domain metadata (\`domain:*\` labels) on GitHub issues` — **[S]** — done early: closed 2026-10-20 (#84), ahead of the rest of this wave, so every issue has an owning domain from the start. Its hours still count toward Wave 4.5's rollup.
 - `[NFR-31] ERD domain-partitioning update` — **[S]**
 
 **Note for `NFR-26`'s boundary design:** decide which module owns log management (`app_logs`, `log_settings`, `logger_level_overrides`, the archive job): `auditlog` or a new module. Deciding it here means `NFR-43` onward is built in the right place. See `actuator_observability.md`.
@@ -419,7 +419,7 @@ None of these are needed before Wave 4.5, which only waits on Wave 2's RBAC work
 
 - `[NFR-06] Code style compliance (Google Java Style Guide)` — **[S]** **(standing — verify)**
 - `[NFR-10] Clean Code principles` — **[S]** **(standing — verify)**
-- `[NFR-11] Minimum test coverage (30%, JUnit 5 + AssertJ)` — **[L]** *(tooling set up early — JaCoCo reporting and Testcontainers dependencies were added during Wave 0 bootstrap, per the reasoning that test infrastructure is cheap to establish early and expensive to retrofit; see `SubscribeMasterApplicationIT` for the reference pattern, now verified working both locally and in CI. What remains for this wave is the actual work: writing enough tests to hit 30% coverage, then flipping `jacoco.check.skip` to `false` in `pom.xml` to enforce it going forward.)*
+- `[NFR-11] Minimum test coverage (30%, JUnit 5 + AssertJ)` — **[L]** *(tooling set up early — JaCoCo reporting and Testcontainers dependencies were added during Wave 0 bootstrap, per the reasoning that test infrastructure is cheap to establish early and expensive to retrofit; see `SubscribeMasterApplicationIT` for the reference pattern, now verified working both locally and in CI. The 30% gate is already enforced: `jacoco.check.skip` is `false` in `pom.xml`, so `./mvnw verify` fails below the threshold. What remains for this wave is the final verification pass: confirming coverage still clears 30% at release.)*
 - `[NFR-09] API documentation completeness (Swagger)` — **[S]** **(standing — verify)**
 
 ---

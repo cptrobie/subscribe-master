@@ -217,7 +217,7 @@ If this application is ever horizontally scaled (multiple instances), the daily 
 
 ## 8. Migration strategy: Flyway, versioned and incremental
 
-Schema changes are delivered as versioned Flyway migrations (`V1`, `V1.1`, `V2`–`V4`, `V6`, `V7` at the time of writing) plus one repeatable migration (`R__seed_subscription_provider_catalog`), not a single monolithic script.
+Schema changes are delivered as versioned Flyway migrations (`V1`, `V1.1`, `V2`–`V4`, `V6`–`V11` at the time of writing; `V5` is a skipped version number and is never reused, see `design-docs/payment_retry_and_dunning.md`) plus one repeatable migration (`R__seed_subscription_provider_catalog`), not a single monolithic script.
 
 **For developers:** once a migration has actually run in any shared environment (staging or production), **never edit it** — write a new `V{n+1}` migration instead, even for a one-line fix. Editing an already-applied migration breaks Flyway's checksum validation and will fail deployments for anyone who already ran it. (Everything up through `V7` in this project has *not* yet been deployed anywhere, which is why earlier fixes in this project's history were made by editing existing migrations rather than adding new ones — that's a one-time luxury of a pre-deployment project, not a pattern to continue once this ships.)
 

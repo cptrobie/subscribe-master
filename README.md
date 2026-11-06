@@ -8,8 +8,9 @@ This project started from a take-home assignment brief and has since grown into 
 
 ## Status
 
-- **Wave-by-wave progress:** see `IMPLEMENTATION_BACKLOG.md` — wave markers (🚧/✅) and
-  individual issue checkboxes reflect real, current state.
+- **Wave-by-wave progress:** see `IMPLEMENTATION_BACKLOG.md` — wave markers (🚧/⏸️/✅) and
+  each completed wave's rollup line reflect real, current state. Per-requirement status
+  lives on the GitHub issues: closed means done, labeled by `wave-*`, `size-*` and `domain:*`.
 - **Time logged, per issue and per wave:** run `./scripts/time_tracking/project_time_report.sh`
   for a live report generated from actual GitHub issue comments, not a hand-maintained summary.
 
@@ -23,7 +24,7 @@ This project started from a take-home assignment brief and has since grown into 
 | **Maven** | Build tool | |
 | **Docker Desktop** | Local Postgres + Vault + Mailpit | Required now — see Getting Started |
 | **IntelliJ IDEA** | Development | Recommended, not required |
-| **Flyway CLI** | Validating migrations independently of the app | Recommended — lets you run `flyway migrate` against local Postgres before the app exists |
+| **Flyway CLI** | Validating migrations independently of the app | Recommended — lets you run `flyway migrate` against local Postgres without starting the app |
 | **pgAdmin 4** | Inspecting the database | Optional, but useful alongside Flyway's own output |
 | **Vault CLI** | Poking at the dev-mode Vault container directly | Optional — the Vault UI in a browser works too |
 
@@ -84,7 +85,12 @@ This project started from a take-home assignment brief and has since grown into 
 6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same five key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
-7. *(Once the application is otherwise runnable)* — this section will be extended with build/run instructions.
+7. **Build, test and run the application:**
+   ```
+   ./mvnw verify
+   SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+   ```
+   `./mvnw verify` is the same command CI runs: unit and integration tests (Testcontainers starts its own Postgres and Vault, so the compose stack isn't needed for this step), plus the JaCoCo 30% coverage gate. `spring-boot:run` needs the compose stack from step 2 and the Vault secrets from step 5. The profile has to be set explicitly; `application.yaml` deliberately doesn't set one. Once it's up, the API docs are at `http://localhost:8080/swagger-ui.html`, and verification emails land in Mailpit at `http://localhost:8025`.
  
 ---
 
