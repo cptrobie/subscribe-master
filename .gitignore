@@ -69,3 +69,5 @@ flyway.local.conf
 
 # --- Docker ---
 compose.override.yaml
+# IntelliJ build output (when not delegating builds to Maven)
+out/
