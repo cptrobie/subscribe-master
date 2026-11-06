@@ -175,7 +175,7 @@ Both are flagged, deliberately, as candidates for living in dedicated external t
 
 **For developers:** don't build features that depend on `app_logs`/`trace_spans` being complete or long-retained in this database — if/when these move to external tooling, that dependency breaks.
 
-**For ops:** monitor table growth on these two specifically. If either is growing unexpectedly fast, that's your signal to prioritize migrating them out rather than just adding more disk. (Decision taken 2026-10-23: see §6.5 and \NFR-42`/`NFR-43`.)`
+**For ops:** monitor table growth on these two specifically. If either is growing unexpectedly fast, that's your signal to prioritize migrating them out rather than just adding more disk. (Decision taken 2026-10-23: see §6.5 and `NFR-42`/`NFR-43`.)
 
 ### 6.3 `notification_log`: prevents duplicate customer-facing messages
 

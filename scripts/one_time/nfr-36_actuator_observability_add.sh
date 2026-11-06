@@ -7,22 +7,10 @@ set -euo pipefail
 # design-docs/actuator_observability.md for the design and
 # subscribe_master_requirements.md for each requirement.
 #
-# STATUS: NOT run yet. Wave labels below follow the "Wave placement"
-# section of design-docs/actuator_observability.md (decided 2026-10-23).
-# Run only after the requirement rows and backlog entries have been
-# moved into subscribe_master_requirements.md / IMPLEMENTATION_BACKLOG.md,
-# since every issue body points there. The TBD guard below stays, in
-# case a placement is reset while under review.
-#
-# After running, check labels with:
-#   ./scripts/issue_hygiene/check_domain_labels.sh
-#
-# Usage:
-#   Run from inside the cloned subscribe-master repo, with gh already
-#   authenticated.
-#
-#     chmod +x nfr-36_actuator_observability_add.sh
-#     ./nfr-36_actuator_observability_add.sh
+# STATUS: ⚠️ ALREADY RUN — 2026-10-23 (created #123–#128 and the
+# FR-41–44 issues). Re-running WILL create duplicate issues.
+# Wave labels below follow the "Wave placement" section of
+# design-docs/actuator_observability.md (decided 2026-10-23).
 # =====================================================================
 
 WAVE_NFR_36="wave-2"

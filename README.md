@@ -201,7 +201,7 @@ Subscription routes only ever return the caller's own rows (FR-04); a concurrent
 | PostgreSQL | Primary database |
 | Flyway | Database migrations |
 | HashiCorp Vault | Secrets management, all environments including local dev |
-| Stripe | Stripe Payment processing (planned, Wave 6) — no dependency or code exists yet|
+| Stripe | Payment processing (planned, Wave 6) |
 | Docker / Compose | Local infrastructure |
 
 (Additional libraries — MapStruct, Resilience4j, Apache POI — get added as the relevant features are built; see `IMPLEMENTATION_BACKLOG.md` for when.)
