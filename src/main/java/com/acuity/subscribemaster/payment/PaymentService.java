@@ -86,7 +86,9 @@ public class PaymentService {
     } else {
       payment.setStatus(PaymentStatus.FAILED);
       if (nextAttemptNumber >= maxAttempts) {
-        // exhausted — cross-domain call + audit + notification, all outside this transaction
+        // TODO(FR-29, Wave 7): publish a retries-exhausted event here — cancellation,
+        // audit (retry_scheduler actor) and notification happen in listeners outside
+        // this transaction. See design-docs/payment_retry_and_dunning.md.
       }
     }
 

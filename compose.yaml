@@ -49,8 +49,9 @@ services:
       - "8025:8025"   # web UI
 
   # --- app service intentionally omitted for now ---
-  # There's no Spring Boot application/Dockerfile to build yet at this stage
-  # of Wave 0. Once the project exists (step 3 in the task order), add:
+  # The app runs from the IDE / `./mvnw spring-boot:run` against this stack.
+  # There's no Dockerfile yet -- the app service arrives with NFR-21 (CD
+  # pipeline), whose prerequisites list it. When that lands, add:
   #
   #   app:
   #     build: .
