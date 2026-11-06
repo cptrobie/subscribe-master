@@ -2,6 +2,7 @@ package com.acuity.subscribemaster.payment;
 
 import com.acuity.subscribemaster.error.ApiError;
 import com.acuity.subscribemaster.payment.dto.PaymentResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
  * {@code POST /register} is a placeholder stub that currently returns {@code null}; making a
  * payment is not yet wired up.
  */
+@Hidden // Wave 6 scaffolding -- excluded from the OpenAPI spec until FR-12 is picked up
 @RestController
 @RequestMapping("/api/v1/payment")
 @Tag(name = "Payment", description = "Payment operations")

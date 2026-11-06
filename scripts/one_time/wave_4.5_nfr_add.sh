@@ -10,7 +10,8 @@ set -euo pipefail
 # anyway (label creation is idempotent via --force) so this script is
 # a complete, accurate record of Wave 4.5's GitHub setup, not just the
 # parts that happened to get scripted first. The six `gh issue create`
-# calls below have NOT been run yet.
+# calls below were run on 2026-09-20 and created #80–#85;
+# re-running WILL create duplicates.
 #
 # Usage:
 #   Run from inside the cloned subscribe-master repo, with gh already

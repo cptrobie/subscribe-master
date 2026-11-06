@@ -21,7 +21,8 @@ set -euo pipefail
 # separately by nfr-36_actuator_observability_add.sh, already carrying
 # their rebalanced wave labels.
 #
-# STATUS: NOT run yet. Run after the backlog changes are merged.
+# STATUS: ⚠️  ALREADY RUN — 2026-10-23. Re-running is harmless (label edits
+# are idempotent) but unnecessary; kept as the record of the rebalance.
 #
 # Usage (from inside the cloned repo, gh authenticated):
 #   ./scripts/one_time/wave_rebalance_2026-10-23.sh

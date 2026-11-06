@@ -238,7 +238,7 @@ active profile) and `version` (from build info). Custom metric names are
 `subscribemaster.<module>.<thing>`, dot-separated lowercase. Tags only ever take
 values from a fixed set; a `MeterFilter` denies known identifier tag keys
 (customer, subscription, email) and caps `uri` values on `http.server.requests`.
-HTTP server metrics use templated URIs (Spring's default — `/api/v1/subscriptions/{id}`;
+HTTP server metrics use templated URIs (Spring's default — `/api/v1/subscribe/{id}`;
 unmatched routes tagged `UNKNOWN`). Outbound HTTP calls are only metered when the
 client is built from Spring's auto-configured `RestClient.Builder` — a client from
 `RestClient.create()` records nothing, so this goes in the checklist.
