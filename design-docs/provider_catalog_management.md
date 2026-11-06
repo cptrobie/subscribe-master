@@ -121,8 +121,7 @@ input at all, so there is no "new provider" for it to validate.
 was resolving `providerName` from the client-supplied `request.providerId()`
 instead of the subscription's real, stored `providerId` — and a related API
 consistency gap, `subscriptionId` living in the request body instead of the
-URL path like every sibling endpoint. Both are being fixed as their own
-change, unrelated to this feature, tracked separately.)
+URL path like every sibling endpoint. Both were fixed in the Wave 3 merge (d09ccbd): \update()` now resolves the name from the stored `providerId`, and the id is a path variable on `PUT /api/v1/subscribe/{id}`.)`
 
 ## Audit logging
 

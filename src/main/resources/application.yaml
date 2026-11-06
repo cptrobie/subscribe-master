@@ -31,7 +31,7 @@ spring:
         # secret/{spring.application.name} and secret/{spring.application.name}/{active-profile},
         # so secrets should be written to secret/subscribe-master (shared)
         # and/or secret/subscribe-master/dev, secret/subscribe-master/prod
-        # (profile-specific overrides). See README.md "Vault bootstrap"
+        # (profile-specific overrides). See README.md "README.md "Getting started", step 5"
         # for the commands to actually populate these.
 
   jpa:

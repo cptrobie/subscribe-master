@@ -56,7 +56,7 @@ flyway.local.conf
 # live token and must never be committed.
 .vault-token
 
-# Locally-generated JWT signing key pair (see README.md "Vault bootstrap") --
+# Locally-generated JWT signing key pair (see README.md "README.md "Getting started", step 5") --
 # provisioned directly into Vault, never meant to be source-controlled.
 *.pem
 # Exception: the dedicated test-only key pair IS committed -- it's a disposable

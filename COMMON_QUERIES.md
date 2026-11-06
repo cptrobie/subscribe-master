@@ -1,6 +1,6 @@
 # Common Queries Reference — Subscribe Master
 
-Practical SQL for the questions that come up repeatedly against this schema. Grouped by domain, with a note on which requirement (if any) each query backs. All examples assume PostgreSQL and the table/column names from `migrations/` (`V1`, `V1.1`, `V2`–`V4`, `R__seed_subscription_provider_catalog`, `V6`, `V7`) — the migration set is the sole source of truth for the schema; there's no longer a separate monolithic schema file.
+Practical SQL for the questions that come up repeatedly against this schema. Grouped by domain, with a note on which requirement (if any) each query backs. All examples assume PostgreSQL and the table/column names from `src/main/resources/db/migration/` (`V1`, `V1.1`, `V2`–`V4`, `V6`–`V11`, `R__seed_subscription_provider_catalog`) — the migration set is the sole source of truth for the schema; there's no longer a separate monolithic schema file.
 
 **A note on status/enum value casing:** every `CHECK`-constrained status/type column in this schema is lowercase (`'succeeded'`, `'failed'`, `'customer'`, `'log'`, `'ok'`, etc.) with **one deliberate exception** — `customer_subscriptions.status` uses uppercase (`'ACTIVE'`, `'CANCELLED'`, `'PAUSED'`), to match `task.pdf`'s literal spec wording so it maps directly to a Java enum. Getting this wrong doesn't error — `WHERE status = 'active'` against `customer_subscriptions` just silently returns zero rows, which is a much harder bug to spot than a query failing outright. Every example query below already uses the correct casing for its table; when writing a new one, double-check this column specifically.
 
@@ -125,7 +125,7 @@ ORDER BY subscription_name, ph.paid_at;
 
 ## 3. Retry & refunds
 
-**Payments stuck at max retry attempts** (ops alert candidate — see `ARCHITECTURE.md` §10):
+**Payments stuck at max retry attempts** (ops alert candidate — see `ARCHITECTURE.md` §11):
 
 ```sql
 SELECT ph.id, ph.subscription_id, ph.attempt_count, ph.amount, ph.currency
@@ -275,7 +275,7 @@ WHERE lock_until < now();
 ```sql
 SELECT action, resource, resource_id, ip_address, created_at
 FROM audit_logs
-WHERE actor_type = $1        -- 'customer' or 'staff'
+WHERE actor_type = $1        -- 'customer', 'staff' or 'retry_scheduler'
   AND actor_id = $2
 ORDER BY created_at DESC
 LIMIT 50;
@@ -287,9 +287,13 @@ LIMIT 50;
 SELECT al.id, al.actor_type, al.actor_id
 FROM audit_logs al
 WHERE (al.actor_type = 'customer' AND NOT EXISTS (
-          SELECT 1 FROM customers c WHERE c.id = al.actor_id))
+    SELECT 1 FROM customers c WHERE c.id = al.actor_id))
    OR (al.actor_type = 'staff' AND NOT EXISTS (
-          SELECT 1 FROM staff_users su WHERE su.id = al.actor_id));
+    SELECT 1 FROM staff_users su WHERE su.id = al.actor_id))
+   -- system actors have no table; their id must be the reserved one
+   -- from support/SystemActors.java
+   OR (al.actor_type = 'retry_scheduler'
+    AND al.actor_id <> '00000000-0000-0000-0000-000000000001');
 ```
 
 ---

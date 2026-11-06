@@ -91,7 +91,27 @@ This project started from a take-home assignment brief and has since grown into 
    SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
    ```
    `./mvnw verify` is the same command CI runs: unit and integration tests (Testcontainers starts its own Postgres and Vault, so the compose stack isn't needed for this step), plus the JaCoCo 30% coverage gate. `spring-boot:run` needs the compose stack from step 2 and the Vault secrets from step 5. The profile has to be set explicitly; `application.yaml` deliberately doesn't set one. Once it's up, the API docs are at `http://localhost:8080/swagger-ui.html`, and verification emails land in Mailpit at `http://localhost:8025`.
- 
+
+## API surface
+
+Everything is versioned under `/api/v1` (NFR-25). Full request/response schemas are in Swagger (`/swagger-ui.html`) once the app is running.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | none | Create an account; sends a verification email. Accepts `Idempotency-Key` (NFR-33) |
+| `POST` | `/api/v1/auth/login` | none | Returns a 15-minute RS256 JWT; 5 failures lock the account for 15 minutes |
+| `GET` | `/api/v1/auth/verify-email?token=…` | none | Confirms the emailed verification link; safe to repeat |
+| `POST` | `/api/v1/auth/resend-verification` | none | Re-sends the verification email, optionally to a corrected address (202). Accepts `Idempotency-Key` |
+| `POST` | `/api/v1/subscribe` | Bearer JWT | Create a subscription (201) |
+| `GET` | `/api/v1/subscribe` | Bearer JWT | List the caller's subscriptions |
+| `GET` | `/api/v1/subscribe/{id}` | Bearer JWT | Fetch one subscription |
+| `PUT` | `/api/v1/subscribe/{id}` | Bearer JWT | Update name, amount, currency, billing frequency |
+| `POST` | `/api/v1/subscribe/{id}/pause` | Bearer JWT | `ACTIVE → PAUSED` |
+| `POST` | `/api/v1/subscribe/{id}/resume` | Bearer JWT | `PAUSED → ACTIVE` |
+| `POST` | `/api/v1/subscribe/{id}/cancel` | Bearer JWT | `ACTIVE/PAUSED → CANCELLED` (terminal)|
+
+Subscription routes only ever return the caller's own rows (FR-04); a concurrent edit to the same row returns 409 `CONCURRENT_MODIFICATION` (NFR-04). See `design-docs/subscription_status_transitions.md` for the state rules.
+
 ---
 
 ## Project structure
@@ -104,7 +124,7 @@ This project started from a take-home assignment brief and has since grown into 
 │   ├── customer/                              # Customer entity and repository
 │   ├── subscribe/                             # Provider catalog, customer subscriptions, status transitions, subscription REST API
 │   │   └── dto/                               # Subscription request/response records
-│   ├── payment/                               # Payment attempts, payment history, refunds, payment REST API
+│   ├── payment/                               # Payment attempts, payment history, refunds (entities and repositories; Stripe flow is Wave 6)
 │   │   └── dto/                               # Payment request/response records
 │   ├── idempotency/                           # Idempotency-Key handling: stored keys, request hashing, replay (NFR-33)
 │   ├── auditlog/                              # Audit log entity, audit actions and actor types, audit service
@@ -144,8 +164,7 @@ This project started from a take-home assignment brief and has since grown into 
 ├── IMPLEMENTATION_BACKLOG.md                  # GitHub issue backlog, wave-based prioritization, sizing
 ├── COMMON_QUERIES.md                          # Reference SQL for common tasks
 ├── FUTURE_RELEASES.md                         # Parking lot for out-of-scope features and extensions
-├── load_testing_open_questions.md             # Open load/performance-testing questions (not yet a formal NFR)
-└── PRESENTATION_OUTLINE.md                    # Slide-by-slide outline for presenting the project
+└── load_testing_open_questions.md             # Open load/performance-testing questions (not yet a formal NFR)
 ```
 
 ---
@@ -182,10 +201,10 @@ This project started from a take-home assignment brief and has since grown into 
 | PostgreSQL | Primary database |
 | Flyway | Database migrations |
 | HashiCorp Vault | Secrets management, all environments including local dev |
-| Stripe | Payment processing |
+| Stripe | Stripe Payment processing (planned, Wave 6) — no dependency or code exists yet|
 | Docker / Compose | Local infrastructure |
 
-(Additional libraries — MapStruct, Resilience4j, Apache POI, springdoc-openapi — get added as the relevant features are built; see `IMPLEMENTATION_BACKLOG.md` for when.)
+(Additional libraries — MapStruct, Resilience4j, Apache POI — get added as the relevant features are built; see `IMPLEMENTATION_BACKLOG.md` for when.)
 
 ---
 

@@ -99,7 +99,7 @@ Most issues involve one or more of these categories. Pick whichever apply and pa
 - [ ] Constructor injection only (NFR-14)
 - [ ] Logging uses SLF4J at appropriate levels; no secrets/PII logged (NFR-23)
 - [ ] Wrapped in `@Transactional` if it touches money or spans multiple table writes (NFR-03)
-- [ ] Optimistic-lock conflicts are caught and retried where relevant, not left to bubble as a raw 500 (NFR-04)
+- [ ] Optimistic-lock conflicts on user-initiated writes are **not** retried server-side: let `ObjectOptimisticLockingFailureException` propagate to `GlobalExceptionHandler`, which returns 409 `CONCURRENT_MODIFICATION` (NFR-04, `ARCHITECTURE.md` §5.1). Only non-interactive writers (schedulers) decide whether to retry
 - [ ] Writes an `audit_logs` entry if this is the kind of action that should be auditable (NFR-17)
 
 **New scheduled job:**
@@ -305,14 +305,14 @@ Example of a paused wave with an optional resumption note:
 - `[FR-10] Pagination & filtering (Specification API, status/currency/price range)` — **[M]**
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
-- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscriptions)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`.
+- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscribe)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-42] Request tracing via Micrometer Tracing + Tempo; drop trace_spans` — **[M]** — depends on `NFR-36` (Wave 2); re-implements `NFR-18`, whose issue closes when this merges; brings up a minimal Grafana with only the Tempo data source (`NFR-32` adds the rest later).
 
 ## Wave 4.5 — Module boundary hardening (modulith)
 
 *(Setup: the `wave-4.5` label already exists — created 2026-09-20 via `scripts/one_time/wave_4.5_nfr_add.sh`'s label-creation step, run ad hoc before the script itself was written down; the script is the accurate record of that action. All six NFR issues below (#80–85) now exist.)*
 
-**Rationale:** deliberately not done sooner. Three domains exist by the end of Wave 2 (`auth`, `customer`, the RBAC/staff pieces of authorization) — enough to name one real violation (`AuthService` reaching directly into `CustomerRepository`/`Customer`), but not enough to learn the lesson a module-boundary exercise is actually for. By the end of Wave 4, Subscription Management (core + extensions) exists alongside them — a fourth domain with its own real interactions (subscriptions reference customers; authorization gates actions across both) — genuinely representative of the kind of cross-domain friction this exercise is meant to teach, not a toy example manufactured to justify doing it. This trade-off is accepted deliberately: this project's goal is depth of practice, not minimizing calendar time (see `README.md`). Three justifications, in order of weight:
+**Rationale:** deliberately not done sooner. When this was planned, three domains were expected by the end of Wave 2 (`auth`, `customer`, the RBAC/staff pieces of authorization) — enough to name one real violation (`AuthService` reaching directly into `CustomerRepository`/`Customer`), but not enough to learn the lesson a module-boundary exercise is actually for. By the end of Wave 4, Subscription Management (core + extensions) exists alongside them — a fourth domain with its own real interactions (subscriptions reference customers; authorization gates actions across both) — genuinely representative of the kind of cross-domain friction this exercise is meant to teach, not a toy example manufactured to justify doing it. This trade-off is accepted deliberately: this project's goal is depth of practice, not minimizing calendar time (see `README.md`). Three justifications, in order of weight:
 
 1. **Enough real coupling to make the lesson genuine, not theoretical.** One cross-domain violation (Wave 1–2) teaches "add a facade." Four interacting domains (through Wave 4) teaches the actual judgment call a module boundary is for — deciding what's API versus internal when more than one plausible caller exists.
 2. **Still early enough that the retrofit stays bounded.** ~4 domains' worth of coupling to unwind, not the 10+ the full roadmap eventually has.
