@@ -6,7 +6,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -29,6 +31,13 @@ import tools.jackson.databind.json.JsonMapper;
  * gets the stored status and body; a different request under the same key is rejected as a
  * mismatch. Only successful responses are stored -- a failed operation rolls back, so its retry
  * runs again.
+ *
+ * <p>On an authenticated endpoint the row also records its caller, and a key can only be replayed
+ * to the caller who stored it (NFR-35). The primary key is per endpoint, not per caller, so without
+ * this check a second customer sending the same key with an identical body would be served the
+ * first customer's response. A different caller is rejected as a mismatch, the same as a different
+ * request, so the response doesn't reveal that someone else used the key. Registration has no
+ * caller, and stores and compares {@code null}.
  *
  * <p>The request hash is an HMAC-SHA256 keyed with a server secret ({@link IdempotencyProperties}),
  * not a plain hash: a registration body contains the password, and a plain SHA-256 of it would be a
@@ -57,13 +66,28 @@ public class IdempotencyService {
   }
 
   /**
+   * Same as {@link #execute(String, String, UUID, Object, Class, Supplier)} with no caller, for an
+   * endpoint that has no logged-in user, such as registration.
+   */
+  public <T> ResponseEntity<T> execute(
+      String key,
+      String endpoint,
+      Object request,
+      Class<T> responseType,
+      Supplier<ResponseEntity<T>> operation) {
+    return execute(key, endpoint, null, request, responseType, operation);
+  }
+
+  /**
    * Runs {@code operation} at most once for {@code key} on {@code endpoint}, or replays the
    * response a previous run stored.
    *
    * <p>A concurrent duplicate with the same key waits for the first request's transaction, fails on
    * the primary key, and then replays the winner's stored row. The operation and the key row commit
-   * in one transaction, so a losing duplicate leaves nothing behind -- no account, no key row, no
-   * after-commit email.
+   * in one transaction, so a losing duplicate leaves no account, subscription, key row or
+   * after-commit email behind. It can leave an audit row: {@code AuditLogService.recordEvent} runs
+   * in its own transaction ({@code REQUIRES_NEW}), so a row it writes before the failure stays
+   * committed. NFR-45 moves success audit rows to after commit.
    *
    * <p>Must not be called from inside an existing transaction: {@code runAndStore} would join it
    * instead of opening its own, so a lost race would mark the caller's transaction rollback-only
@@ -72,18 +96,22 @@ public class IdempotencyService {
    * @param key the {@code Idempotency-Key} header value; {@code null} runs the operation unguarded
    * @param endpoint the method and path the key is scoped to, e.g. {@code "POST
    *     /api/v1/auth/register"}
+   * @param callerId the authenticated caller, stored with the row and compared before any replay;
+   *     {@code null} for an endpoint with no logged-in user
    * @param request the request DTO, hashed to detect a key reused with a different request
    * @param responseType the response body's type, used to read a stored body back on replay
    * @param operation the real work; it should be {@code @Transactional} (default propagation) so it
    *     joins the transaction the key row is saved in
    * @return the operation's response, or the stored one marked {@code Idempotent-Replayed: true}
    * @throws InvalidIdempotencyKeyException if the key is blank or longer than 255 characters
-   * @throws IdempotencyKeyMismatchException if the key was already used with a different request
+   * @throws IdempotencyKeyMismatchException if the key was already used with a different request,
+   *     or by a different caller
    * @throws IdempotentReplayCorruptedException if a stored body can't be read back
    */
   public <T> ResponseEntity<T> execute(
       String key,
       String endpoint,
+      UUID callerId,
       Object request,
       Class<T> responseType,
       Supplier<ResponseEntity<T>> operation) {
@@ -102,22 +130,24 @@ public class IdempotencyService {
     // D. look for an existing row: found -> replay or reject
     var existing = findLive(pk);
     if (existing.isPresent()) {
-      return replayOrReject(existing.get(), hash, responseType);
+      return replayOrReject(existing.get(), callerId, hash, responseType);
     }
 
     // E. not found -> run and store (inside a transaction)
     try {
-      return runAndStore(pk, hash, operation);
+      return runAndStore(pk, callerId, hash, operation);
     } catch (RuntimeException e) {
       // F. if E failed for any reason -> look again: found -> replay or reject, else rethrow
-      return findLive(pk).map(row -> replayOrReject(row, hash, responseType)).orElseThrow(() -> e);
+      return findLive(pk)
+          .map(row -> replayOrReject(row, callerId, hash, responseType))
+          .orElseThrow(() -> e);
     }
   }
 
   /**
-   * Runs {@code operation} and inserts its key row in one new transaction, so both commit or
-   * neither does. Only a successful run reaches the insert: if the operation throws, everything
-   * rolls back and nothing is stored, so a retry runs it again.
+   * Runs {@code operation} and inserts its key row, with the caller, in one new transaction, so
+   * both commit or neither does. Only a successful run reaches the insert: if the operation throws,
+   * everything rolls back and nothing is stored, so a retry runs it again.
    *
    * <p>{@code saveAndFlush} sends the insert immediately rather than at commit, so a concurrent
    * duplicate fails here: usually with a {@link DataIntegrityViolationException}, on this key's
@@ -128,7 +158,7 @@ public class IdempotencyService {
    * rollback is done.
    */
   private <T> ResponseEntity<T> runAndStore(
-      IdempotencyPk pk, String hash, Supplier<ResponseEntity<T>> operation) {
+      IdempotencyPk pk, UUID callerId, String hash, Supplier<ResponseEntity<T>> operation) {
     return txnTemplate.execute(
         status -> {
           var response = operation.get(); // joins this transaction (REQUIRED)
@@ -138,7 +168,7 @@ public class IdempotencyService {
               new IdempotencyKey(
                   pk.idempotencyKey(),
                   pk.endpoint(),
-                  null, // callerId: registration has no logged-in caller
+                  callerId,
                   hash,
                   response.getStatusCode().value(),
                   json,
@@ -148,16 +178,23 @@ public class IdempotencyService {
   }
 
   /**
-   * Replays {@code row}'s stored status and body if this request's hash matches the stored one,
-   * marked with an {@code Idempotent-Replayed: true} header; otherwise throws {@link
-   * IdempotencyKeyMismatchException}. Used for both an ordinary retry and a concurrent duplicate
-   * that lost the insert race.
+   * Replays {@code row}'s stored status and body if the caller and this request's hash both match
+   * the stored ones, marked with an {@code Idempotent-Replayed: true} header; otherwise throws
+   * {@link IdempotencyKeyMismatchException}. The caller is checked first, so another customer's row
+   * is rejected whatever the body, and is never even compared. Used for both an ordinary retry and
+   * a concurrent duplicate that lost the insert race.
    *
    * @throws IdempotentReplayCorruptedException if the stored body can't be read back as {@code
    *     responseType}
    */
   private <T> ResponseEntity<T> replayOrReject(
-      IdempotencyKey row, String hash, Class<T> responseType) {
+      IdempotencyKey row, UUID callerId, String hash, Class<T> responseType) {
+
+    if (!Objects.equals(row.getCallerId(), callerId)) {
+      logger.warn("Idempotency-Key reused by a different caller on {}", row.getId().endpoint());
+      throw new IdempotencyKeyMismatchException();
+    }
+
     // constant-time compare, so response timing can't reveal how much of the stored hash matched
     var isMatch =
         MessageDigest.isEqual(

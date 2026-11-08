@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,8 @@ import tools.jackson.databind.json.JsonMapper;
 class IdempotencyServiceTest {
   private static final String KEY = "key-1";
   private static final String ENDPOINT = "POST /test";
+  private static final UUID CALLER = UUID.randomUUID();
+  private static final UUID OTHER_CALLER = UUID.randomUUID();
   private static final IdempotencyPk PK = new IdempotencyPk(KEY, ENDPOINT);
   private static final String REPLAYED_HEADER = "Idempotent-Replayed";
 
@@ -72,6 +75,7 @@ class IdempotencyServiceTest {
 
   @Test
   void blankKey_throwsInvalidKey_andDoesNotRun() {
+    // Act & Assert
     assertThatThrownBy(
             () -> idemService.execute("  ", ENDPOINT, REQUEST, TestBody.class, this::created))
         .isInstanceOf(InvalidIdempotencyKeyException.class);
@@ -82,8 +86,10 @@ class IdempotencyServiceTest {
 
   @Test
   void keyOverMaxLength_throwsInvalidKey() {
+    // Arrange
     var key = "a".repeat(IdempotencyService.MAX_KEY_LENGTH + 1);
 
+    // Act & Assert
     assertThatThrownBy(
             () -> idemService.execute(key, ENDPOINT, REQUEST, TestBody.class, this::created))
         .isInstanceOf(InvalidIdempotencyKeyException.class);
@@ -123,6 +129,7 @@ class IdempotencyServiceTest {
     assertThat(row.getResponseStatus()).isEqualTo(201);
     assertThat(row.getResponseBody()).contains("\"ok\"");
     assertThat(row.getRequestHash()).isNotBlank();
+    assertThat(row.getCallerId()).isNull();
     assertThat(row.getExpiresAt())
         .isCloseTo(Instant.now().plus(idemProps.ttl()), within(5, ChronoUnit.SECONDS));
 
@@ -159,7 +166,7 @@ class IdempotencyServiceTest {
     when(idemRepo.findById(PK)).thenReturn(Optional.of(row));
     var changed = new TestRequest(REQUEST.email(), "Different!456");
 
-    // Act / Assert
+    // Act & Assert
     assertThatThrownBy(
             () -> idemService.execute(KEY, ENDPOINT, changed, TestBody.class, this::created))
         .isInstanceOf(IdempotencyKeyMismatchException.class);
@@ -204,7 +211,7 @@ class IdempotencyServiceTest {
             Instant.now().plus(idemProps.ttl()));
     when(idemRepo.findById(PK)).thenReturn(Optional.of(corrupted));
 
-    // Act / Assert
+    // Act & Assert
     assertThatThrownBy(
             () -> idemService.execute(KEY, ENDPOINT, REQUEST, TestBody.class, this::created))
         .isInstanceOf(IdempotentReplayCorruptedException.class);
@@ -244,7 +251,7 @@ class IdempotencyServiceTest {
           throw boom;
         };
 
-    // Act / Assert
+    // Act & Assert
     assertThatThrownBy(() -> idemService.execute(KEY, ENDPOINT, REQUEST, TestBody.class, failing))
         .isSameAs(boom);
     verify(idemRepo, never()).saveAndFlush(any());
@@ -298,10 +305,104 @@ class IdempotencyServiceTest {
     when(idemRepo.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("dup"));
     var changed = new TestRequest(REQUEST.email(), "Different!456");
 
-    // Act / Assert: the mismatch, not the original constraint failure
+    // Act & Assert: the mismatch, not the original constraint failure
     assertThatThrownBy(
             () -> idemService.execute(KEY, ENDPOINT, changed, TestBody.class, this::created))
         .isInstanceOf(IdempotencyKeyMismatchException.class);
+  }
+
+  // --- caller ---
+
+  @Test
+  void firstRun_withCaller_storesCallerId() {
+    // Arrange
+    when(idemRepo.findById(PK)).thenReturn(Optional.empty());
+
+    // Act
+    var response =
+        idemService.execute(KEY, ENDPOINT, CALLER, REQUEST, TestBody.class, this::created);
+
+    // Assert: the stored row
+    var captor = ArgumentCaptor.forClass(IdempotencyKey.class);
+    verify(idemRepo).saveAndFlush(captor.capture());
+    var row = captor.getValue();
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getHeaders().getFirst(REPLAYED_HEADER)).isNull();
+    assertThat(runs).hasValue(1);
+    assertThat(row.getCallerId()).isEqualTo(CALLER);
+  }
+
+  @Test
+  void retryBySameCaller_replaysStoredResponse() {
+    // Arrange
+    var row = firstRun(CALLER, REQUEST);
+
+    when(idemRepo.findById(PK)).thenReturn(Optional.of(row));
+
+    // Act
+    var response =
+        idemService.execute(KEY, ENDPOINT, CALLER, REQUEST, TestBody.class, this::created);
+
+    // Assert
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getBody()).isEqualTo(new TestBody("ok"));
+    assertThat(response.getHeaders().getFirst(REPLAYED_HEADER)).isEqualTo("true");
+    assertThat(runs).hasValue(0);
+    verify(idemRepo, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void retryByDifferentCaller_throwsMismatch_evenWithSameRequest() {
+    // Arrange
+    var row = firstRun(CALLER, REQUEST);
+
+    when(idemRepo.findById(PK)).thenReturn(Optional.of(row));
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                idemService.execute(
+                    KEY, ENDPOINT, OTHER_CALLER, REQUEST, TestBody.class, this::created))
+        .isInstanceOf(IdempotencyKeyMismatchException.class);
+
+    assertThat(runs).hasValue(0);
+    verify(idemRepo, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void retryWithCaller_againstRowWithNoCaller_throwsMismatch() {
+    // Arrange
+    var row = firstRun(REQUEST);
+
+    when(idemRepo.findById(PK)).thenReturn(Optional.of(row));
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                idemService.execute(KEY, ENDPOINT, CALLER, REQUEST, TestBody.class, this::created))
+        .isInstanceOf(IdempotencyKeyMismatchException.class);
+
+    assertThat(runs).hasValue(0);
+    verify(idemRepo, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void lostRaceByDifferentCaller_throwsMismatch() {
+    // Arrange: the winner's row isn't visible at step D, but is once our insert
+    // has failed...and it belongs to another caller
+    var winner = firstRun(OTHER_CALLER, REQUEST);
+
+    when(idemRepo.findById(PK)).thenReturn(Optional.empty(), Optional.of(winner));
+    when(idemRepo.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("dup"));
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                idemService.execute(KEY, ENDPOINT, CALLER, REQUEST, TestBody.class, this::created))
+        .isInstanceOf(IdempotencyKeyMismatchException.class);
+
+    verify(idemRepo).saveAndFlush(any());
+    assertThat(runs).hasValue(1);
   }
 
   // --- helpers ---
@@ -317,17 +418,31 @@ class IdempotencyServiceTest {
     return firstRun(request, this::created);
   }
 
+  /** {@link #firstRun(UUID, TestRequest, Supplier)} with no caller. */
+  private IdempotencyKey firstRun(
+      TestRequest request, Supplier<ResponseEntity<TestBody>> operation) {
+    return firstRun(null, request, operation);
+  }
+
+  /**
+   * {@link #firstRun(UUID, TestRequest, Supplier)} with the default {@link #created()} operation.
+   */
+  private IdempotencyKey firstRun(UUID callerId, TestRequest request) {
+    return firstRun(callerId, request, this::created);
+  }
+
   /**
    * Runs a first request through an empty store and returns the row the service saved, so a test
    * can stub it back as "already stored". Captured rather than built by hand so its request hash is
-   * the service's own -- recomputing the HMAC here would duplicate the code under test. Clears the
-   * repository's recorded calls and the run counter afterwards, so each test only sees its own
-   * calls.
+   * the service's own -- recomputing the HMAC here would duplicate the code under test. The row is
+   * stored with {@code callerId}; {@code null} takes the no-caller path, as registration does.
+   * Clears the repository's recorded calls and the run counter afterwards, so each test only sees
+   * its own calls.
    */
   private IdempotencyKey firstRun(
-      TestRequest request, Supplier<ResponseEntity<TestBody>> operation) {
+      UUID callerId, TestRequest request, Supplier<ResponseEntity<TestBody>> operation) {
     when(idemRepo.findById(PK)).thenReturn(Optional.empty());
-    idemService.execute(KEY, ENDPOINT, request, TestBody.class, operation);
+    idemService.execute(KEY, ENDPOINT, callerId, request, TestBody.class, operation);
     var captor = ArgumentCaptor.forClass(IdempotencyKey.class);
     verify(idemRepo).saveAndFlush(captor.capture());
     clearInvocations(idemRepo);
