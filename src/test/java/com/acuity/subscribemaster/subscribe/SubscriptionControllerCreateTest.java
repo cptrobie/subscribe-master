@@ -1,5 +1,9 @@
 package com.acuity.subscribemaster.subscribe;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -491,25 +495,13 @@ public class SubscriptionControllerCreateTest extends AbstractSubscriptionContro
   @Test
   void rejected_invalidProviderId_returnsEntityNotFoundException() throws Exception {
     var providerId = UUID.randomUUID();
-    var paymentMethodId = UUID.randomUUID();
-    var accountIdentifier = "accountIdentifier";
-    var nextPayBillDate = LocalDate.now().plusDays(7);
-    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
     var currency = Currency.EUR;
     var amount = new BigDecimal("9.99");
     var billFreq = BillingFrequency.WEEKLY;
+    var nextPayBillDate = LocalDate.now().plusDays(7);
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
-    var invalidRequest =
-        new SubscriptionRequest(
-            providerId,
-            null,
-            accountIdentifier,
-            paymentMethodId,
-            currency,
-            amount,
-            billFreq,
-            null,
-            nextPayBillDate);
+    var invalidRequest = subscribeRequest(providerId, currency, amount, billFreq, nextPayBillDate);
 
     when(subscriptionSvc.create(customerId, invalidRequest, ipAddress))
         .thenThrow(new EntityNotFoundException("Provider not found: " + providerId));
@@ -531,5 +523,135 @@ public class SubscriptionControllerCreateTest extends AbstractSubscriptionContro
                 .content("{not valid json"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ErrorCode.MALFORMED_REQUEST.name()));
+  }
+
+  // --- idempotency ---
+
+  @Test
+  void create_withIdempotencyKey_passesKeyEndpointAndCallerToService() throws Exception {
+    var providerId = UUID.randomUUID();
+    var currency = Currency.EUR;
+    var amount = new BigDecimal("0.01");
+    var billFreq = BillingFrequency.MONTHLY;
+    var nextPayBillDate = LocalDate.now().plusDays(7);
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    var validRequest = subscribeRequest(providerId, currency, amount, billFreq, nextPayBillDate);
+    var validResponse =
+        subscribeResponse(
+            providerId,
+            currency,
+            amount,
+            billFreq,
+            nextPayBillDate,
+            SubscriptionStatus.ACTIVE,
+            Instant.parse("2026-06-01T00:00:00Z"));
+
+    when(subscriptionSvc.create(customerId, validRequest, ipAddress)).thenReturn(validResponse);
+
+    mvc.perform(
+            post("/api/v1/subscribe")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", "key-1")
+                .content(objectMapper.writeValueAsString(validRequest)))
+        .andExpect(status().isCreated());
+
+    verify(idempotencySvc)
+        .execute(
+            eq("key-1"),
+            eq(SubscriptionController.CREATE_ENDPOINT),
+            eq(customerId),
+            eq(validRequest),
+            eq(SubscriptionResponse.class),
+            any());
+  }
+
+  @Test
+  void create_withoutIdempotencyKey_passesNullKey_andStillCreates() throws Exception {
+    var providerId = UUID.randomUUID();
+    var currency = Currency.EUR;
+    var amount = new BigDecimal("0.01");
+    var billFreq = BillingFrequency.MONTHLY;
+    var nextPayBillDate = LocalDate.now().plusDays(7);
+    var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
+    var validRequest = subscribeRequest(providerId, currency, amount, billFreq, nextPayBillDate);
+    var validResponse =
+        subscribeResponse(
+            providerId,
+            currency,
+            amount,
+            billFreq,
+            nextPayBillDate,
+            SubscriptionStatus.ACTIVE,
+            Instant.parse("2026-06-01T00:00:00Z"));
+
+    when(subscriptionSvc.create(customerId, validRequest, ipAddress)).thenReturn(validResponse);
+
+    mvc.perform(
+            post("/api/v1/subscribe")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validRequest)))
+        .andExpect(status().isCreated());
+
+    verify(idempotencySvc)
+        .execute(
+            isNull(),
+            eq(SubscriptionController.CREATE_ENDPOINT),
+            eq(customerId),
+            eq(validRequest),
+            eq(SubscriptionResponse.class),
+            any());
+  }
+
+  // --- helpers ---
+
+  private SubscriptionRequest subscribeRequest(
+      UUID providerId,
+      Currency currency,
+      BigDecimal amount,
+      BillingFrequency billFreq,
+      LocalDate nextPayBillDate) {
+    var accountIdentifier = "accountIdentifier";
+    var paymentMethodId = UUID.randomUUID();
+
+    return new SubscriptionRequest(
+        providerId,
+        null,
+        accountIdentifier,
+        paymentMethodId,
+        currency,
+        amount,
+        billFreq,
+        null,
+        nextPayBillDate);
+  }
+
+  private SubscriptionResponse subscribeResponse(
+      UUID providerId,
+      Currency currency,
+      BigDecimal amount,
+      BillingFrequency billFreq,
+      LocalDate nextPayBillDate,
+      SubscriptionStatus status,
+      Instant startedAt) {
+    var id = UUID.randomUUID();
+    var providerName = "Netflix"; // from the subscription_providers table
+    var category = " streaming_video"; // from the subscription_providers table
+
+    return SubscriptionResponse.accepted(
+        id,
+        customerId,
+        providerId,
+        providerName,
+        null,
+        category,
+        currency,
+        amount,
+        billFreq,
+        nextPayBillDate,
+        status,
+        null,
+        startedAt);
   }
 }
