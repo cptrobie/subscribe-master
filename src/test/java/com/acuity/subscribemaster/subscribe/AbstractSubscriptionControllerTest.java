@@ -1,10 +1,14 @@
 package com.acuity.subscribemaster.subscribe;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.acuity.subscribemaster.error.GlobalExceptionHandler;
+import com.acuity.subscribemaster.idempotency.IdempotencyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,6 +29,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 abstract class AbstractSubscriptionControllerTest {
 
   protected final SubscriptionService subscriptionSvc = mock(SubscriptionService.class);
+  protected final IdempotencyService idempotencySvc = mock(IdempotencyService.class);
   protected final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   protected UUID customerId;
@@ -44,7 +49,10 @@ abstract class AbstractSubscriptionControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    SubscriptionController controller = new SubscriptionController(subscriptionSvc);
+    when(idempotencySvc.execute(any(), any(), any(), any(), any(), any()))
+        .thenAnswer(inv -> inv.<Supplier<?>>getArgument(5).get());
+
+    SubscriptionController controller = new SubscriptionController(subscriptionSvc, idempotencySvc);
 
     mvc =
         MockMvcBuilders.standaloneSetup(controller)

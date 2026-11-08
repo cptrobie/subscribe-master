@@ -106,7 +106,22 @@ class SubscriptionApiIT {
 
   private <T> ResponseEntity<T> call(
       HttpMethod method, String path, Caller as, Object body, Class<T> type) {
+    return call(method, path, as, body, type, null);
+  }
+
+  private <T> ResponseEntity<T> call(
+      HttpMethod method,
+      String path,
+      Caller as,
+      Object body,
+      Class<T> type,
+      String idempotencyKey) {
     var headers = new HttpHeaders();
+
+    if (idempotencyKey != null) {
+      headers.set("Idempotency-Key", idempotencyKey);
+    }
+
     headers.setBearerAuth(as.token());
     headers.setContentType(MediaType.APPLICATION_JSON);
     return restTemplate.exchange(path, method, new HttpEntity<>(body, headers), type);
@@ -502,5 +517,45 @@ class SubscriptionApiIT {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().code()).isEqualTo(ErrorCode.MALFORMED_REQUEST.name());
     assertThat(response.getBody().message()).isEqualTo("No matching route for this request.");
+  }
+
+  @Test
+  void createRetriedWithSameKey_replaysOriginal_andCreatesOnlyOnce() {
+    var customer = registerAndLogin();
+    var request = customNameRequest("Gym");
+    var key = UUID.randomUUID().toString();
+
+    var firstResponse =
+        call(HttpMethod.POST, BASE, customer, request, SubscriptionResponse.class, key);
+    var retryResponse =
+        call(HttpMethod.POST, BASE, customer, request, SubscriptionResponse.class, key);
+
+    assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(retryResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(firstResponse.getHeaders().getFirst("Idempotent-Replayed")).isNull();
+    assertThat(retryResponse.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+    assertThat(retryResponse.getBody().id()).isEqualTo(firstResponse.getBody().id());
+
+    assertThat(subscriptionRepo.findByCustomerId(customer.id())).hasSize(1);
+    assertThat(auditCount(customer, AuditAction.SUBSCRIPTION_CREATED, firstResponse.getBody().id()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void createWithAnotherCustomersKey_returns422_andCreatesNothing() {
+    var owner = registerAndLogin();
+    var other = registerAndLogin();
+    var request = customNameRequest("Gym");
+    var key = UUID.randomUUID().toString();
+
+    var ownerResponse =
+        call(HttpMethod.POST, BASE, owner, request, SubscriptionResponse.class, key);
+    var otherResponse = call(HttpMethod.POST, BASE, other, request, ApiError.class, key);
+
+    assertThat(ownerResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(otherResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    assertThat(otherResponse.getBody().code()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_MISMATCH.name());
+    assertThat(subscriptionRepo.findByCustomerId(owner.id())).hasSize(1);
+    assertThat(subscriptionRepo.findByCustomerId(other.id())).isEmpty();
   }
 }

@@ -184,7 +184,7 @@ Rebalanced on 2026-10-23, when Wave 8 would otherwise have reached 128h. Estimat
 | 1 (complete) | 92 | | 6 | 60 |
 | 2 | 68 | | 7 | 52 |
 | 4 | 36 | | 8 | 64 |
-| 4.5 | 68 | | 9 | 64 |
+| 4.5 | 72 | | 9 | 64 |
 | 5 | 56 | | 10 | 64 |
 | 5.5 | 76 | | 11 | 36 |
 
@@ -193,7 +193,7 @@ A wave under 60h is fine when there's a reason:
 - **Wave 6:** `NFR-21` (24h) is blocked until hosting is chosen.
 - **Wave 11:** it's verification, not build work.
 
-Wave 4's figure includes `NFR-35` (S). The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
+Wave 4's figure includes `NFR-35` (S). Wave 4.5's includes `NFR-45` (S), added 2026-11-07, which takes it to 72h: above the 70h target but under the 80h cap. The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
 
 ## Wave status markers
 
@@ -305,7 +305,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-10] Pagination & filtering (Specification API, status/currency/price range)` — **[M]**
 - `[FR-11] Soft delete for subscriptions` — **[S]**
 - `[FR-27] Category grouping` — **[S]**
-- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscribe)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`.
+- `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscribe)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`. **Done early:** picked up right after Wave 1 closed, before Wave 2 (decided 2026-11-05). It stays in Wave 4, and its hours count toward Wave 4's rollup.
 - `[NFR-42] Request tracing via Micrometer Tracing + Tempo; drop trace_spans` — **[M]** — depends on `NFR-36` (Wave 2); re-implements `NFR-18`, whose issue closes when this merges; brings up a minimal Grafana with only the Tempo data source (`NFR-32` adds the rest later).
 
 ## Wave 4.5 — Module boundary hardening (modulith)
@@ -325,6 +325,7 @@ Full reasoning, including the estimated cost of delaying further and the specifi
 - `[NFR-26] Domain module boundaries (package encapsulation)` — **[M]**
 - `[NFR-27] Module boundary enforcement tooling (Spring Modulith verification)` — **[M]** **(standing)**
 - `[NFR-28] Event-driven cross-module communication convention` — **[M]** **(standing)**
+- `[NFR-45] Audit rows for successful actions written after commit` — **[S]** — depends on `NFR-28`, whose domain events it records with `AFTER_COMMIT`; rejections (`REGISTRATION_REJECTED`, `ACCOUNT_LOCKED`) keep `REQUIRES_NEW`. Found during `NFR-35`: a concurrent duplicate with the same key, or an optimistic-lock conflict, currently leaves an audit row for a change that rolled back. See `NFR-45`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-29] Domain-partitioned database schema` — **[L]** **(standing)**
 - `[NFR-30] Domain metadata (\`domain:*\` labels) on GitHub issues` — **[S]** — done early: closed 2026-10-20 (#84), ahead of the rest of this wave, so every issue has an owning domain from the start. Its hours still count toward Wave 4.5's rollup.
 - `[NFR-31] ERD domain-partitioning update` — **[S]**

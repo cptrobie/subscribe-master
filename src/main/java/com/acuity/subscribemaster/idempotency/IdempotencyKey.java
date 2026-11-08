@@ -93,6 +93,10 @@ public class IdempotencyKey implements Persistable<IdempotencyPk> {
    * primary key. The INSERT runs at flush, so use {@code saveAndFlush()} to see that failure where
    * it happens.
    */
+  public UUID getCallerId() {
+    return callerId;
+  }
+
   @Override
   public boolean isNew() {
     return createdAt == null;
