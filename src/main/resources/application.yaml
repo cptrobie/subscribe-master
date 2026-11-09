@@ -73,6 +73,18 @@ app:
   login-lockout:
     max-attempts: 5
     duration-minutes: 15
+  staff:
+    # Staff login lockout (FR-06), kept separate from customer login-lockout
+    # above and deliberately stricter: staff accounts are the most
+    # privileged in the system, so fewer guesses are allowed before a lock.
+    # See design-docs/staff_authorization_design.md.
+    #
+    # The first-admin credentials (app.staff.bootstrap-admin.email /
+    # .password) are NOT set here. They come only from Vault; see README.md
+    # "Getting started", step 5.
+    login-lockout:
+      max-attempts: 3
+      duration-minutes: 15
   idempotency:
     ttl: PT24H
   mail:

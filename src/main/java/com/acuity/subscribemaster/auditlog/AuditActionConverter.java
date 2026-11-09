@@ -7,8 +7,8 @@ import java.util.Locale;
 /**
  * Maps {@link AuditAction} to {@code audit_logs.action}, stored as the enum's lowercase name (e.g.
  * {@code ACCOUNT_LOCKED} as {@code account_locked}) to match the values allowed by {@code
- * audit_logs_action_check} ({@code V10}, widened in {@code V11}). Applied automatically to every
- * {@link AuditAction} attribute.
+ * audit_logs_action_check} ({@code V10}, widened in {@code V11} and {@code V13}). Applied
+ * automatically to every {@link AuditAction} attribute.
  */
 @Converter(autoApply = true)
 public class AuditActionConverter implements AttributeConverter<AuditAction, String> {
