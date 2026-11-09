@@ -271,11 +271,9 @@ Example of a paused wave with an optional resumption note:
 - `[NFR-34] Audit a failed verification email send at registration (EMAIL_VERIFICATION_SEND_FAILED)` — **[S]** — follow-on to `FR-30`: new `AuditAction`, a migration widening (`V11`) `audit_logs_action_check`, and the audit write in `VerificationEmailListener`'s failure path. Independent of `NFR-33` and `FR-40`. See `NFR-34`'s notes in `subscribe_master_requirements.md`.
 - `[NFR-02] Global exception handling` — **[S]** — introduce as soon as the first real endpoints exist, not later
 
-## Wave 2 — Staff authorization & platform baseline
+## Wave 2 — Staff authorization & platform baseline 🚧 In progress
 
 **Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first. Also carries the platform pieces that must exist before Wave 4.5: audit `details` (`NFR-41`) and the Actuator baseline (`NFR-36`/`NFR-38`). See `actuator_observability.md`.
-
-**Temporarily bypassed Wave 2 while working on Wave 1, jumping to Wave 3. On Wave 3 completion, reverted back to Wave 1.** Wave 3 has no dependency on Wave 2, so work proceeds there first for variety after an auth-heavy stretch. Wave 4.5 (module boundary enforcement) needs Wave 2's RBAC work done first — role checks are exactly the kind of feature likely to introduce cross-domain coupling worth verifying against. Wave 9 (statistics) also explicitly depends on Wave 2's role checks, per this wave's own rationale above. Neither can start until Wave 2 is completed, even though Wave 3 can proceed without it. **Remove this note once Wave 2 is actually picked back up** — it exists only to explain the temporary reorder, not as a permanent record.
 
 **Rebalanced 2026-10-23** (see "Wave sizing"): two-factor authentication and the customer's contact preferences (`FR-36`, `FR-33`, `FR-34`) moved to Wave 5.5. `NFR-41`, `NFR-36` and `NFR-38` were added. Order within this wave: `NFR-41` → `FR-06` → `FR-35` → `NFR-36` → `NFR-38` → `FR-05`. About 68h.
 

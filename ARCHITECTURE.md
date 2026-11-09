@@ -169,6 +169,10 @@ Both tables have a `version` column. Every update must check-and-increment the v
 
 **For audit:** because there's no FK, periodic validation queries (does every `audit_logs.actor_id` with `actor_type` `customer` or `staff` actually resolve to a real row? system-actor rows are checked instead against the reserved ids in `SystemActors`) are worth running on a schedule — this is the one place in the schema where referential integrity is a process, not a database guarantee.
 
+**`details` — what changed (`V12`, `NFR-41`).** The columns above say who did what to which resource, but not *what changed*: `resource_id` is a UUID, and there was nowhere to record, say, a logger's old and new level. `details` is a nullable `jsonb` column for that, mapped as `Map<String, Object>` on `AuditLog` and written through the `recordEvent` overload that takes it. Rows with nothing to add leave it `NULL`, which is every row written before `V12` and every caller of the original overload.
+
+**For developers:** keep `details` a small JSON object holding only what a reviewer needs. For a change, that's `{"from": …, "to": …}` plus a key naming the thing changed, e.g. `{"logger": "com.acuity", "from": "INFO", "to": "DEBUG"}`. `"from"` may be `null` for a first-time set, so build the map with `HashMap`, not `Map.of`, which rejects nulls. **Never put secrets or personal data in it**: `NFR-23`'s rule for logs applies here too. It isn't a dumping ground for whole request bodies or entity snapshots.
+
 ### 6.2 `app_logs` and `trace_spans`: expect them to outgrow the primary database
 
 Both are flagged, deliberately, as candidates for living in dedicated external tooling (a log aggregator like Datadog/CloudWatch for `app_logs`; a tracing backend like Jaeger/Zipkin/Tempo for `trace_spans`) rather than the primary database in a real production deployment. They're modeled here to satisfy the requirement at the schema level, not as a strong recommendation to actually run high-volume logging through your transactional Postgres instance.
