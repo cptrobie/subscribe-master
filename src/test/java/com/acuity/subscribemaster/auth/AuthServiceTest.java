@@ -234,7 +234,7 @@ class AuthServiceTest {
 
     when(credChecker.check(email, rawPassword, ipAddress)).thenReturn(customerId);
     when(customerRepo.findById(customerId)).thenReturn(Optional.of(loggedInCustomer));
-    when(jwtIssuer.issue(customerId)).thenReturn(issuedToken);
+    when(jwtIssuer.issueCustomer(customerId)).thenReturn(issuedToken);
 
     // Act
     var response = authService.login(email, rawPassword, ipAddress);
@@ -245,7 +245,7 @@ class AuthServiceTest {
     assertThat(response.expiresAt()).isEqualTo(issuedToken.expiresAt());
 
     // Assert: the customer's own ID is what gets passed to the issuer
-    verify(jwtIssuer).issue(customerId);
+    verify(jwtIssuer).issueCustomer(customerId);
     verifyNoInteractions(auditLogService);
   }
 
