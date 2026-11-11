@@ -84,7 +84,7 @@ app:
     # "Getting started", step 5.
     login-lockout:
       max-attempts: 3
-      duration-minutes: 15
+      duration-minutes: 10
   idempotency:
     ttl: PT24H
   mail:
