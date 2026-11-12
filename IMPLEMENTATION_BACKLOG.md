@@ -181,19 +181,21 @@ Rebalanced on 2026-10-23, when Wave 8 would otherwise have reached 128h. Estimat
 
 | Wave | Hours | | Wave | Hours |
 |---|---|---|---|---|
-| 1 (complete) | 92 | | 6 | 60 |
-| 2 | 68 | | 7 | 52 |
-| 4 | 36 | | 8 | 64 |
+| 1 (complete) | 92 | | 6 | 72 |
+| 2 | 60 | | 7 | 60 |
+| 4 | 40 | | 8 | 52 |
 | 4.5 | 72 | | 9 | 64 |
 | 5 | 56 | | 10 | 64 |
 | 5.5 | 76 | | 11 | 36 |
+| 5.7 | 52 | | | |
 
 A wave under 60h is fine when there's a reason:
 - **Wave 4:** it's the last stop before 4.5, so padding it only delays the modulith wave.
-- **Wave 6:** `NFR-21` (24h) is blocked until hosting is chosen.
 - **Wave 11:** it's verification, not build work.
+- **Wave 8:** `FR-21` moved to Wave 7, where `FR-29` first needs it; the rest of Wave 8 is one notification chain that stays together.
+- **Wave 5.7:** its two staff features have to land between Wave 4.5 and the first deployment in Wave 6. Pulling more in would mean moving items whose dependencies or rationale tie them to their current wave.
 
-Wave 4's figure includes `NFR-35` (S). Wave 4.5's includes `NFR-45` (S), added 2026-11-07, which takes it to 72h: above the 70h target but under the 80h cap. The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
+Wave 4's figure includes `NFR-35` (S) and `NFR-47` (S). On 2026-11-12: `NFR-46` (S) was added to Wave 2 and `NFR-48` (M) to Wave 6 directly after `NFR-21` (taking it to 72h, above the 70h target but under the 80h cap), `FR-21` moved from Wave 8 to Wave 7 ahead of `FR-29`'s schedulers, and Wave 5.7 was inserted for staff administration (`FR-45`, `FR-46`), taking `FR-05` from Wave 2 and `FR-41` from Wave 7. That leaves Wave 2 at 60h, Wave 6 at 72h, Wave 7 at 60h, Wave 8 at 52h and Wave 5.7 at 52h. Wave 4.5's includes `NFR-45` (S), added 2026-11-07, which takes it to 72h: above the 70h target but under the 80h cap. The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
 
 ## Wave status markers
 
@@ -275,12 +277,12 @@ Example of a paused wave with an optional resumption note:
 
 **Rationale:** depends on Wave 1 existing. Needed before Wave 9 (statistics), since admin-only statistics require role checks to exist first. Also carries the platform pieces that must exist before Wave 4.5: audit `details` (`NFR-41`) and the Actuator baseline (`NFR-36`/`NFR-38`). See `actuator_observability.md`.
 
-**Rebalanced 2026-10-23** (see "Wave sizing"): two-factor authentication and the customer's contact preferences (`FR-36`, `FR-33`, `FR-34`) moved to Wave 5.5. `NFR-41`, `NFR-36` and `NFR-38` were added. Order within this wave: `NFR-41` → `FR-06` → `FR-35` → `NFR-36` → `NFR-38` → `FR-05`. About 68h.
+**Rebalanced 2026-10-23** (see "Wave sizing"): two-factor authentication and the customer's contact preferences (`FR-36`, `FR-33`, `FR-34`) moved to Wave 5.5. `NFR-41`, `NFR-36` and `NFR-38` were added. Order within this wave: `NFR-41` → `FR-06` → `NFR-46` → `FR-35` → `NFR-36` → `NFR-38`. About 60h. On 2026-11-12, `NFR-46` (S) was added and `FR-05` moved to Wave 5.7.
 
 - `[NFR-41] audit_logs.details column (what changed, old → new)` — **[S]** — no dependencies; **first in this wave**, so `FR-06`'s and `FR-35`'s audit rows record old → new values from the start, and `NFR-28` (Wave 4.5) designs audit events with `details` once. Amends `NFR-17`. See `actuator_observability.md`.
-- `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this
 - `[FR-06] Role-based access control (staff roles/permissions)` — **[L]** *(revised from [M] — the original estimate covered "add role checks" in the abstract; the actual scope is staff login, staff JWT issuance, loading a staff user's permissions into the security context, and the Spring Security wiring to enforce them, none of which exist today. See `staff_authorization_design.md` for the full design, including why this is a cross-cutting blocker beyond just this wave — `FR-28` (Wave 7) also depends on it.)*
-- `[FR-35] Staff-managed subscription provider catalog (create/update/deactivate)` — **[M]** — **built immediately after `FR-06`**, before the rest of this wave — deliberately chosen as the first real consumer of `FR-06`'s new permission infrastructure (low-stakes catalog metadata, not financial risk). **Not sourced from `task.pdf`.** See `provider_catalog_management.md` for the full design.
+- `[NFR-46] Separate OpenAPI docs for the customer and staff APIs (springdoc groups)` — **[S]** — depends on `FR-06`; right after it and before `FR-35`, so `FR-35`'s staff endpoints land in the staff group from the start. Two `GroupedOpenApi` beans, one Swagger UI page per audience, each with its own bearer scheme. Not a separate port and not the actuator port; see `NFR-46`'s notes in `subscribe_master_requirements.md`. Raised 2026-11-12 during `FR-06`.
+- `[FR-35] Staff-managed subscription provider catalog (create/update/deactivate)` — **[M]** — **built right after `FR-06`** (with only `NFR-46`, the small docs split, in between), before the rest of this wave — deliberately chosen as the first real consumer of `FR-06`'s new permission infrastructure (low-stakes catalog metadata, not financial risk). **Not sourced from `task.pdf`.** See `provider_catalog_management.md` for the full design.
 - `[NFR-36] Actuator baseline (management port, health + info only, separate security chain)` — **[M]** — no dependencies; after `FR-35`, so the actuator security chain is added beside `FR-06`'s staff chain in the same wave. Makes Spring Modulith's actuator endpoint available for Wave 4.5. See `actuator_observability.md`.
 - `[NFR-38] Build identity in /actuator/info` — **[S]** — depends on `NFR-36`.
 
@@ -305,6 +307,7 @@ Example of a paused wave with an optional resumption note:
 - `[FR-27] Category grouping` — **[S]**
 - `[NFR-35] Idempotency-Key support on subscription create (POST /api/v1/subscribe)` — **[S]** — depends on `NFR-33` (Wave 1), whose reusable service it wires in; can be picked up as soon as that lands. Closes a gap from `FR-07` (Wave 3), where a retried create silently duplicates the subscription. See `NFR-35`'s notes in `subscribe_master_requirements.md`. **Done early:** picked up right after Wave 1 closed, before Wave 2 (decided 2026-11-05). It stays in Wave 4, and its hours count toward Wave 4's rollup.
 - `[NFR-42] Request tracing via Micrometer Tracing + Tempo; drop trace_spans` — **[M]** — depends on `NFR-36` (Wave 2); re-implements `NFR-18`, whose issue closes when this merges; brings up a minimal Grafana with only the Tempo data source (`NFR-32` adds the rest later).
+- `[NFR-47] No public API documentation in production` — **[S]** — turn springdoc off in `application-prod.yaml`, with a test that `/v3/api-docs` isn't served under the prod profile. Must land before any real deployment (`NFR-21`, Wave 6). Raised 2026-11-12 during `FR-06`; see `NFR-47`'s notes in `subscribe_master_requirements.md`.
 
 ## Wave 4.5 — Module boundary hardening (modulith)
 
@@ -359,34 +362,50 @@ None of these are needed before Wave 4.5, which only waits on Wave 2's RBAC work
 - `[FR-37] SMS sending via Twilio (SmsSender)` — **[M]** — a `ChannelSender` implementation beside `EmailSender` in the `message` module, so `MessageService` routes to it with no caller changes; needs a Twilio account and Vault-held credentials. **Not sourced from `task.pdf`.**
 - `[FR-38] Phone verification (SMS code) required before text can become the preferred contact method` — **[L]** — depends on `FR-36` and `FR-37`. **Not sourced from `task.pdf`.**
 
+## Wave 5.7 — Staff administration & token lifecycle
+
+*(Inserted 2026-11-12. Needs a `wave-5.7` label; `FR-05` and `FR-41` move here from Waves 2 and 7.)*
+
+**Rationale:** closes the gap found during `FR-06`. Once the bootstrap admin exists there's no way to add, deactivate or re-role staff, or reset a staff password, without hand-run SQL. Placed:
+- **after Wave 4.5**, so these are built inside the module boundaries and use `NFR-45`'s after-commit audit pattern from the start;
+- **before Wave 6**, the first real deployment (`NFR-21`), since a deployed system with one admin and no way to add staff isn't usable;
+- **before Wave 7**, whose `FR-28` needs a `billing_admin` and whose diagnostics need `auditor` staff, neither of which can exist before `FR-45`.
+
+To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (customer refresh tokens; no dependencies, and building it after Wave 4.5 puts it in the right module) and `FR-41` from Wave 7 (a staff endpoint, so it sits with the other staff work). Wave 2 drops to 60h and Wave 7 to 60h. Nothing in either wave depended on the moved items. Order: `FR-46` → `FR-45` → `FR-41`; `FR-05` can go anywhere. About 52h. See `design-docs/staff_account_administration.md`.
+
+- `[FR-46] Staff password set and reset (invitation, forgot password, admin-triggered)` — **[M]** — depends on `FR-06` and `FR-30`; **first**, because `FR-45`'s invitations link to it. Uses the existing `staff_password_reset_tokens` table. Testable alone with the bootstrap admin. **Not sourced from `task.pdf`.**
+- `[FR-45] Staff account administration (create by invitation, list, change role, deactivate/reactivate)` — **[L]** — depends on `FR-06`, `FR-46` and `NFR-45`; behind `manage_staff`. Includes the last-active-admin guard. **Not sourced from `task.pdf`.**
+- `[FR-41] Staff system status endpoint (read-only, RBAC)` — **[S]** — depends on `NFR-36`, `NFR-38` and `FR-06` (Wave 2); uses the existing `view_system_health` permission. See `actuator_observability.md`.
+- `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this *(Moved from Wave 2 on 2026-11-12.)*
+
 ## Wave 6 — Payments core
 
-**Rationale:** depends on Wave 3 (subscriptions must exist to attach payments to) and Wave 5 (currency conversion needed to populate `base_currency_amount`).
+**Rationale:** depends on Wave 3 (subscriptions must exist to attach payments to) and Wave 5 (currency conversion needed to populate `base_currency_amount`). `NFR-48` moved here from Wave 7 on 2026-11-12 to follow `NFR-21` directly. About 72h: above the 70h target but under the 80h cap. Nothing could move out to Wave 7 instead: `FR-12` and `NFR-03` are the payment flow Wave 7 builds on, and `NFR-48` needs `NFR-21`.
 
 - `[FR-12] Payment history persistence, including after subscription cancellation` — **[L]**
 - `[NFR-03] Transactional integrity on money-related operations` — **[M]**
 - `[NFR-21] CD pipeline: automated deployment to staging/prod` — **[L]** *(blocked — do not start until a hosting platform is chosen; see `subscribe_master_requirements.md` for the full prerequisite list. Placed here because this wave completes the "Waves 0–6" milestone, the first point where deploying something actually means anything.)*
+- `[NFR-48] Staff API restricted at the network edge; real client IP in audit logs behind the proxy` — **[M]** — depends on `NFR-21`; **directly after it in this wave** (moved from Wave 7 on 2026-11-12), so the first real deployment never has the staff API open to the internet or an audit trail full of the proxy's address. Edge rules keep `/api/v1/staff/**` off the internet; `server.forward-headers-strategy`, trusting only the proxy, keeps audit `ip_address` correct. See `NFR-48`'s notes in `subscribe_master_requirements.md`.
 
 ## Wave 7 — Payment resilience & runtime diagnostics
 
-**Rationale:** depends on Wave 6 existing — you need a working payment flow before you can retry or refund it. The two staff diagnostics endpoints (`FR-41`, `FR-42`) were added in the 2026-10-23 rebalance. Changing log levels at runtime is most useful while debugging payment retries.
+**Rationale:** depends on Wave 6 existing — you need a working payment flow before you can retry or refund it. The staff log-level endpoint (`FR-42`) was added in the 2026-10-23 rebalance, because changing log levels at runtime is most useful while debugging payment retries. `FR-41` (staff system status) moved to Wave 5.7 on 2026-11-12, beside the other staff features. On the same date `NFR-48` moved to Wave 6, and `FR-21` (ShedLock) came here from Wave 8 because `FR-29`'s schedulers need it.
 
+- `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]** — **first in this wave** (moved from Wave 8 on 2026-11-12): `FR-29`'s billing and retry schedulers use `@SchedulerLock` (see `payment_retry_and_dunning.md`), so ShedLock has to exist before them.
 - `[FR-29] Payment retry / dunning (up to 3 attempts)` — **[L]**
 - `[FR-28] Partial refund support` — **[M]** — also blocked on `FR-06`: `billing_admin`'s ability to issue refunds per `ARCHITECTURE.md`'s role description means nothing until staff permission enforcement actually exists; see `staff_authorization_design.md`
-- `[FR-41] Staff system status endpoint (read-only, RBAC)` — **[S]** — depends on `NFR-36`, `NFR-38` and `FR-06` (Wave 2); uses the existing `view_system_health` permission. See `actuator_observability.md`.
 - `[FR-42] Staff log-level management (persisted, audited)` — **[M]** — depends on `FR-06` and `NFR-41` (Wave 2). Each change is audited with the staff member as actor and old/new levels in `details`.
 
 ## Wave 8 — Scheduling & notifications
 
 **Rationale:** depends on Wave 3 (needs `next_payment_date` to check against) and benefits from Wave 6 existing (a real payment flow to warn about).
 
-**Contact-preference set, last piece (`FR-39`).** `FR-36`–`FR-38` are built in Wave 5.5 (`FR-37`/`FR-38` moved there from this wave in the 2026-10-23 rebalance, which also moved `NFR-44`/`FR-44` to Wave 9 instead of here). Order within this wave: `FR-21` → `FR-18` → `FR-32` → `FR-20` (abstraction, wrapping `FR-37`'s `SmsSender`) → `FR-39` (text 2FA, amending `FR-33`) → `FR-19` routing by `preferred_contact_method`. About 64h, including the +8h from `FR-20` growing S → M.
+**Contact-preference set, last piece (`FR-39`).** `FR-36`–`FR-38` are built in Wave 5.5 (`FR-37`/`FR-38` moved there from this wave in the 2026-10-23 rebalance, which also moved `NFR-44`/`FR-44` to Wave 9 instead of here). `FR-21` (ShedLock) moved to Wave 7 on 2026-11-12, ahead of `FR-29`'s schedulers, so it's already in place here. Order within this wave: `FR-18` → `FR-32` → `FR-20` (abstraction, wrapping `FR-37`'s `SmsSender`) → `FR-39` (text 2FA, amending `FR-33`) → `FR-19` routing by `preferred_contact_method`. About 64h, including the +8h from `FR-20` growing S → M.
 
 - `[FR-18] Daily scheduled payment-due check` — **[S]**
 - `[FR-19] Payment-due warning notification (log/email/text)` — **[M]** — delivered on the customer's preferred contact method (`FR-36`); `notification_log.channel`'s CHECK must add `'sms'`
 - `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[M]** *(revised from [S] — now also wraps `FR-37`'s `SmsSender` as a second strategy and selects between email and text from `preferred_contact_method`, with an email fallback on Twilio failure. See `contact_preferences_and_sms.md`.)*
 - `[FR-39] 2FA code delivered on the preferred contact channel (email/text, email fallback on Twilio failure)` — **[M]** — amends `FR-33`; depends on `FR-33` and `FR-38`. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md`.
-- `[FR-21] Scheduler concurrency safety (ShedLock)` — **[M]**
 - `[FR-32] Unverified account cleanup (24h expiry) + expired refresh-token cleanup (customer_refresh_tokens.expires_at)` — **[M]** — retargeted from customer_sessions during the JWT pivot; customer_refresh_tokens is now the stateful, DB-backed table with the same unbounded-growth problem
 
 ## Wave 9 — Reporting, statistics & log retention
@@ -398,7 +417,7 @@ None of these are needed before Wave 4.5, which only waits on Wave 2's RBAC work
 - `[FR-24] Most expensive subscription statistic` — **[S]**
 - `[FR-25] Total monthly spend statistic` — **[S]**
 - `[FR-26] Monthly cost trend (6/12 months, JSON)` — **[M]**
-- `[NFR-44] Log archive and retention job (app_logs, audit_logs)` — **[L]** — depends on `NFR-41` (Wave 2), `NFR-43` (Wave 5) and `FR-21` (Wave 8); amends `NFR-17`. See `actuator_observability.md`.
+- `[NFR-44] Log archive and retention job (app_logs, audit_logs)` — **[L]** — depends on `NFR-41` (Wave 2), `NFR-43` (Wave 5) and `FR-21` (Wave 7); amends `NFR-17`. See `actuator_observability.md`.
 - `[FR-44] Staff audit-log archive settings (bounded by config floors)` — **[S]** — depends on `FR-06`, `NFR-41` and `NFR-44`; `manage_audit_log_settings` is `admin`-only.
 
 ## Wave 10 — Observability & audit

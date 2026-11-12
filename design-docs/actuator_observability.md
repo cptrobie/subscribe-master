@@ -44,7 +44,7 @@ breakdown is kept outside the repository.
 | `NFR-42` | Request tracing via Micrometer Tracing (OpenTelemetry) exported to Tempo; trace ids in log lines; `trace_spans` dropped | M (12h) | 4 | `NFR-36`; Grafana data source via `NFR-32` |
 | `NFR-43` | Application logs to console only, or console + `app_logs` — buffered, batched writes that never slow a request | M (12h) | 5 | nothing |
 | `NFR-44` | Log archive and retention job for `app_logs` and `audit_logs`: export to dated archive files, delete archived rows, delete expired archives | L (24h) | 9 | `NFR-41`, `NFR-43`, `FR-21` |
-| `FR-41` | Staff system status endpoint (health, build version, log levels — read-only) | S (4h) | 7 | `NFR-36`, `NFR-38`, `FR-06` |
+| `FR-41` | Staff system status endpoint (health, build version, log levels — read-only) | S (4h) | 5.7 (moved from 7 on 2026-11-12) | `NFR-36`, `NFR-38`, `FR-06` |
 | `FR-42` | Staff log-level management: change or reset a logger's level at runtime, persisted, audited | M (12h) | 7 | `FR-06`, `NFR-41` |
 | `FR-43` | Staff application-log settings: destination, minimum table level, and (table only) archive settings | M (12h) | 10 | `FR-06`, `NFR-41`, `NFR-43`, `NFR-44` |
 | `FR-44` | Staff audit-log archive settings, bounded by retention floors set in config | S (4h) | 9 | `FR-06`, `NFR-41`, `NFR-44` |
@@ -573,7 +573,7 @@ destination, because audit logs always go to the table.
 | `IMPLEMENTATION_BACKLOG.md` wave headings and notes | Part of the wider wave rebalance: new titles, Wave 2's order line, and `NFR-18` closed by `NFR-42`. | wave plan |
 | `NFR-23` notes, `ARCHITECTURE.md` §6.2, §12 | `app_logs` is now an optional, buffered second destination with a minimum level and archive-based retention. §6.2's "expect it to outgrow the primary database" is answered by the minimum level and the archive job rather than by moving it out. | `NFR-43`, `NFR-44` |
 | `staff_authorization_design.md`, `V1.1` follow-up | Three new permissions (`manage_log_levels`, `manage_app_log_settings`, `manage_audit_log_settings`), each granted to `admin` explicitly. | `FR-42`–`FR-44` |
-| `FR-21` (ShedLock, Wave 8) | Becomes a dependency of `NFR-44` (Wave 9), and through it of `FR-43`/`FR-44`. | `NFR-44` |
+| `FR-21` (ShedLock, Wave 7 since 2026-11-12) | Becomes a dependency of `NFR-44` (Wave 9), and through it of `FR-43`/`FR-44`. | `NFR-44` |
 | `NFR-21` | Hosting must provide an internal-only management port, configurable probe paths, and a durable volume (or shared storage) for archive files — files inside a container are lost on redeploy. Network policy and a non-local dashboard share `NFR-21`'s blocked status. | note only |
 | `load_testing_open_questions.md` | Item 3 (no metrics) is answered by `NFR-39`; item 4's "something to observe the app" by Prometheus/Grafana. | `NFR-39` |
 | `README.md` tool list, `compose.yaml` | Prometheus and Tempo services; management port in the commented-out `app` service, with a healthcheck on `/actuator/health/readiness`; an archive volume. | `NFR-37`, `NFR-39`, `NFR-42`, `NFR-44` |
