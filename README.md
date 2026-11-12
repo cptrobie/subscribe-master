@@ -184,6 +184,7 @@ Subscription routes only ever return the caller's own rows (FR-04); a concurrent
 | `design-docs/payment_retry_and_dunning.md` | Payment retry scheduling, backoff and dunning |
 | `design-docs/provider_catalog_management.md` | Staff-managed subscription provider catalog |
 | `design-docs/staff_authorization_design.md` | Staff authentication and permission-based authorization |
+| `design-docs/staff_account_administration.md` | Proposed: staff invitations, password set/reset, role changes and deactivation |
 | `design-docs/white_label_branding_and_multipart_email.md` | Draft: per-deployment white-label branding, and the future plain-text → multipart (text + HTML) email refactor |
 | `design-docs/actuator_observability.md` | Actuator baseline, health model, metrics contract and observability wave placement — `NFR-36`–`NFR-42` |
 | `design-docs/resend_verification_sequence.md` | Sequence and flow diagrams, and the 9 settled decisions, for resending the verification email — `FR-40` |
