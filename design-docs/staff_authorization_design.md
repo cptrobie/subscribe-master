@@ -125,9 +125,16 @@ mirrors `CredentialChecker`, with the same `REQUIRES_NEW` /
 `noRollbackFor` handling, unified credential errors and live lock-expiry
 check.
 
-It reads its own settings, `app.staff.login-lockout.*`: 3 attempts and 15
+It reads its own settings, `app.staff.login-lockout.*`: 3 attempts and 10
 minutes, against the customer's 5 and 15. (This was revised on 2026-11-09;
-the first decision reused the customer settings.)
+the first decision reused the customer settings. The duration was lowered
+from 15 to 10 minutes on 2026-11-11.)
+
+The lock is shorter than the customer's, but staff still get fewer guesses
+over time: at most 3 per 10 minutes (18 an hour), against 5 per 15 minutes
+(20 an hour) for customers. The fewer attempts per lock are what make it
+stricter, and the shorter lock means a staff member who mistypes is back in
+sooner.
 
 - **Why it's in FR-06's scope:** shipping the most privileged login in the
   system with weaker brute-force protection than customer login would be a
