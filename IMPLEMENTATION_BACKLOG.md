@@ -410,7 +410,7 @@ To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (cu
 
 ## Wave 9 — Reporting, statistics & log retention
 
-**Rationale:** deliberately last among the feature waves — every one of these reads data produced by Waves 3–8, so building this earlier just means building against fake/incomplete data. The log archive job and audit-log settings (`NFR-44`, `FR-44`) were added in the 2026-10-23 rebalance. The job needs ShedLock (`FR-21`, Wave 8), and placing it here rather than in Wave 8 keeps that wave under the 80h cap.
+**Rationale:** deliberately last among the feature waves — every one of these reads data produced by Waves 3–8, so building this earlier just means building against fake/incomplete data. The log archive job and audit-log settings (`NFR-44`, `FR-44`) were added in the 2026-10-23 rebalance. The job needs ShedLock (`FR-21`, Wave 8 at the time, Wave 7 since 2026-11-12), and placing it here rather than in Wave 8 kept that wave under the 80h cap.
 
 - `[FR-22] Annual cost report export (Excel/CSV)` — **[M]**
 - `[FR-23] Report contents (name, monthly price, base equivalent, annual total)` — **[S]**

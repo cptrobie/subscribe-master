@@ -10,20 +10,24 @@ The diagram below is a high-level roadmap view of the project, grouped by domain
 graph LR
     A["Design & Planning<br/>ERD, schema, docs<br/><i>(this document)</i>"] --> B["Project Bootstrap<br/>Env config, Compose,<br/>Vault (all envs), CI/CD,<br/>GitHub Issues setup<br/>(Wave 0)"]
 
-    B --> C["Auth & Staff Authorization<br/>Login, RBAC, tokens,<br/>Actuator baseline<br/>(Waves 1-2)"]
+    B --> C["Auth & Staff Authorization<br/>Login, JWT, staff RBAC,<br/>Actuator baseline<br/>(Waves 1-2)"]
 
     C --> D["Subscription Management<br/>CRUD, status, filtering,<br/>request tracing<br/>(Waves 3-4)"]
     C --> M["Module Boundaries<br/>Spring Modulith,<br/>schema partitioning<br/>(Wave 4.5)"]
     D --> M
     M --> E["Currency Conversion<br/>Rates, caching, fallback,<br/>app log storage<br/>(Wave 5)"]
     M --> N["Two-Factor & Contact Preferences<br/>2FA, SMS, phone verification<br/>(Wave 5.5)"]
+    M --> S["Staff Administration<br/>Invitations, password reset,<br/>roles, refresh tokens<br/>(Wave 5.7)"]
 
-    D --> F["Payments Core<br/>Stripe integration, history<br/>(Wave 6)"]
+    D --> F["Payments Core<br/>Stripe integration, history,<br/>CD pipeline, edge security<br/>(Wave 6)"]
     E --> F
     B --> F
+    S --> F
 
-    F --> G["Payment Resilience<br/>Retry, refunds,<br/>runtime diagnostics<br/>(Wave 7)"]
-    D --> H["Scheduling & Notifications<br/>Reminders, ShedLock<br/>(Wave 8)"]
+    F --> G["Payment Resilience<br/>ShedLock, retry, refunds,<br/>runtime diagnostics<br/>(Wave 7)"]
+    S --> G
+    D --> H["Scheduling & Notifications<br/>Reminders, cleanup jobs<br/>(Wave 8)"]
+    G --> H
     F --> H
     N --> H
 
@@ -183,11 +187,11 @@ Two paths were considered for closing NFR-18:
 
 ## 4. Summary
 
-**Schema-level requirements fully met:** 33 of the 35 requirements that are actually schema concerns are fully met (FR-03–05, FR-07–09, FR-11–13, FR-15, FR-17, FR-19, FR-21, FR-23–32, FR-40, NFR-04, NFR-05, NFR-07, NFR-13, NFR-17, NFR-18, NFR-33–35); the remaining 2 (FR-06, NFR-03) are Partial — see below. Of the 88 requirements in total, the other 53 are N/A.
+**Schema-level requirements fully met:** 34 of the 36 requirements that are actually schema concerns are fully met (FR-03–05, FR-07–09, FR-11–13, FR-15, FR-17, FR-19, FR-21, FR-23–32, FR-40, NFR-04, NFR-05, NFR-07, NFR-13, NFR-17, NFR-18, NFR-33–35, NFR-41); the remaining 2 (FR-06, NFR-03) are Partial — see below. Of the 94 requirements in total, the other 58 are N/A.
 **Partial:** FR-06 (RBAC implemented differently than spec'd), NFR-03 (constraints help but transactions are app-level).
 
 **Still open:** none at the schema level. FR-06 and NFR-03 remain Partial by design, not by gap — see their notes above.
 
 **Recent updates:** FR-09 was Met from the outset — the `status` CHECK constraint and default value used uppercase (`'ACTIVE'`, etc.) in `V2` from the start, per that migration's own header comment; no later casing fix was needed.
 
-**Not applicable to schema:** the remaining 53 requirements are endpoints, libraries, code patterns, testing, or deployment concerns that a database schema cannot satisfy on its own — most of them already have the supporting tables/columns/indexes in place for the application layer to build on.
+**Not applicable to schema:** the remaining 58 requirements are endpoints, libraries, code patterns, testing, or deployment concerns that a database schema cannot satisfy on its own — most of them already have the supporting tables/columns/indexes in place for the application layer to build on.

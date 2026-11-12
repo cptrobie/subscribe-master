@@ -77,6 +77,11 @@ parts that touch this set: `NFR-18` closes when `NFR-42` merges (Wave 4), since
 Order within Wave 2: `NFR-41` → `FR-06` → `FR-35` → `NFR-36` → `NFR-38` →
 `FR-05`. Within Wave 4: the existing items, then `NFR-42`.
 
+**Superseded in part on 2026-11-12:** `FR-41` and `FR-05` moved to Wave 5.7,
+`FR-21` (ShedLock) moved from Wave 8 to Wave 7, and `NFR-46` now follows
+`FR-06` in Wave 2. The table and order above record the 2026-10-23 placement;
+`IMPLEMENTATION_BACKLOG.md` is the current source.
+
 **`NFR-42` needs a Grafana before `NFR-32` exists.** Tempo has no screen of its
 own, so `NFR-42` brings up a minimal Grafana in `compose.yaml` with only the
 Tempo data source. `NFR-32` (Wave 10) later adds the PostgreSQL and Prometheus
