@@ -1,12 +1,18 @@
 package com.acuity.subscribemaster.config;
 
+import com.acuity.subscribemaster.staff.StaffJwtAuthenticationConverter;
+import com.acuity.subscribemaster.support.JwtAudiences;
 import com.acuity.subscribemaster.support.PemKeys;
+import java.security.interfaces.RSAPublicKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -43,29 +49,57 @@ import org.springframework.security.web.SecurityFilterChain;
  * public route needs an entry in the {@code permitAll()} list, and the test suite should prove it.
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
-  @Bean
-  JwtDecoder jwtDecoder(@Value("${jwt.public-key}") String publicKeyPem) {
-    return NimbusJwtDecoder.withPublicKey(PemKeys.parsePublicKey(publicKeyPem)).build();
+  private final RSAPublicKey publicKey;
+
+  public SecurityConfig(@Value("${jwt.public-key}") String publicKeyPem) {
+    this.publicKey = PemKeys.parsePublicKey(publicKeyPem);
+  }
+
+  private JwtDecoder audienceDecoder(String audience) {
+    var decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
+    decoder.setJwtValidator(
+        JwtValidators.createDefaultWithValidators(new JwtAudienceValidator(audience)));
+    return decoder;
   }
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    http.authorizeHttpRequests(
+  @Order(1)
+  SecurityFilterChain staffSecurityFilterChain(
+      HttpSecurity http, StaffJwtAuthenticationConverter staffConverter) throws Exception {
+    http.securityMatcher("/api/v1/staff/**")
+        .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers(
-                        "/api/v1/auth/**",
-                        // TEMPORARY (FR-06 step 4c): moves to the staff chain in step 5
-                        "/api/v1/staff/auth/**",
-                        "/v3/api-docs/**",
-                        "/swagger-ui/**",
-                        "/swagger-ui.html")
+                auth.requestMatchers("/api/v1/staff/auth/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+        .oauth2ResourceServer(
+            oauth2 ->
+                oauth2.jwt(
+                    jwt ->
+                        jwt.decoder(audienceDecoder(JwtAudiences.STAFF))
+                            .jwtAuthenticationConverter(staffConverter)))
         .csrf(csrf -> csrf.disable());
+    return http.build();
+  }
+
+  @Bean
+  @Order(2)
+  SecurityFilterChain customerSecurityFilterChain(HttpSecurity http) throws Exception {
+    http.authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers(
+                        "/api/v1/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .oauth2ResourceServer(
+            oauth2 -> oauth2.jwt(jwt -> jwt.decoder(audienceDecoder(JwtAudiences.CUSTOMER))))
+        .csrf(csrf -> csrf.disable());
+
     return http.build();
   }
 }

@@ -11,6 +11,7 @@ import com.acuity.subscribemaster.error.ErrorCode;
 import com.acuity.subscribemaster.staff.dto.StaffLoginRequest;
 import com.acuity.subscribemaster.staff.dto.StaffLoginResponse;
 import com.acuity.subscribemaster.support.JwtAudiences;
+import com.acuity.subscribemaster.support.JwtIssuer;
 import com.acuity.subscribemaster.support.PemKeys;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.SignedJWT;
@@ -31,6 +32,9 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -60,8 +64,12 @@ import org.testcontainers.utility.DockerImageName;
  *       REQUIRES_NEW} with {@code noRollbackFor}), checked by reloading the row;
  *   <li>unknown email, wrong password and deactivated account return identical 401 responses, and a
  *       lock returns 429 even with the correct password;
+ *   <li>a successful login resets the failure counter, and an expired lock is cleared on the next
+ *       attempt rather than needing a scheduled job;
  *   <li>the audit rows ({@code STAFF_LOGGED_IN}, {@code ACCOUNT_LOCKED}) are written with actor
- *       type {@code STAFF}.
+ *       type {@code STAFF} and the caller's address, and a plain failed attempt writes none;
+ *   <li>the two security chains tell tokens apart by {@code aud}: a staff token is rejected on a
+ *       customer path and a customer token on a staff path, both as an invalid token.
  * </ul>
  *
  * <p>The lockout settings are read from the real {@code app.staff.login-lockout.*} configuration,
@@ -109,6 +117,7 @@ public class StaffAuthControllerIT {
   @Autowired private RoleRepository roleRepo;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private AuditLogRepository auditLogRepo;
+  @Autowired private JwtIssuer jwtIssuer;
 
   @BeforeAll
   static void configureAndSeedVault() throws Exception {
@@ -124,23 +133,10 @@ public class StaffAuthControllerIT {
       throw new IllegalStateException("vault login failed: " + loginResult.getStderr());
     }
 
-    var putResult =
-        vault.execInContainer(
-            "vault",
-            "kv",
-            "put",
-            "-address=http://127.0.0.1:8200",
-            "secret/subscribe-master",
-            "spring.datasource.username=subscribe_master",
-            "spring.datasource.password=test_only_not_a_real_secret");
-    if (putResult.getExitCode() != 0) {
-      throw new IllegalStateException("vault kv put failed: " + putResult.getStderr());
-    }
-
     String testPrivateKeyPem = readTestResource("test-jwt-keys/jwt-private.pem");
     String testPublicKeyPem = readTestResource("test-jwt-keys/jwt-public.pem");
 
-    putResult =
+    var putResult =
         vault.execInContainer(
             "vault",
             "kv",
@@ -244,6 +240,27 @@ public class StaffAuthControllerIT {
     var reloaded = staffRepo.findById(staffUser.getId()).orElseThrow();
     assertThat(reloaded.getFailedLoginCount()).isEqualTo(1);
     assertThat(reloaded.getLockedUntil()).isNull();
+
+    // Only the lock itself is audited (see StaffCredentialChecker); a plain miss is not.
+    assertThat(auditLogRepo.findByActorIdAndAction(staffUser.getId(), AuditAction.ACCOUNT_LOCKED))
+        .isEmpty();
+  }
+
+  @Test
+  void staffLoginAfterFailedAttempt_resetsFailureCounterOnSuccess() {
+    var staffUser = saveStaffUser();
+
+    var miss = login(staffUser.getEmail(), "wrong" + PASSWORD, ApiError.class);
+    assertThat(miss.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(staffRepo.findById(staffUser.getId()).orElseThrow().getFailedLoginCount())
+        .isEqualTo(1);
+
+    var success = login(staffUser.getEmail(), PASSWORD, StaffLoginResponse.class);
+    assertThat(success.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    var reloaded = staffRepo.findById(staffUser.getId()).orElseThrow();
+    assertThat(reloaded.getFailedLoginCount()).isZero();
+    assertThat(reloaded.getLockedUntil()).isNull();
   }
 
   @Test
@@ -309,10 +326,33 @@ public class StaffAuthControllerIT {
     assertThat(lockedAttempt.getBody()).isNotNull();
     assertThat(lockedAttempt.getBody().code()).isEqualTo(ErrorCode.ACCOUNT_LOCKED.name());
 
+    // A wrong password while locked is still 429, doesn't advance the counter, and
+    // doesn't audit the lock a second time.
+    var wrongWhileLocked = login(staffUser.getEmail(), "wrong" + PASSWORD, ApiError.class);
+    assertThat(wrongWhileLocked.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    assertThat(staffRepo.findById(staffUser.getId()).orElseThrow().getFailedLoginCount())
+        .isEqualTo(maxLoginAttempts);
+
     var lockAudits =
         auditLogRepo.findByActorIdAndAction(staffUser.getId(), AuditAction.ACCOUNT_LOCKED);
     assertThat(lockAudits).hasSize(1);
     assertThat(lockAudits.get(0).getActorType()).isEqualTo(ActorType.STAFF);
+    assertThat(lockAudits.get(0).getIpAddress()).isNotBlank();
+  }
+
+  @Test
+  void staffLoginAfterLockExpires_clearsLockAndSucceeds() {
+    var staffUser = saveStaffUser();
+    staffUser.setFailedLoginCount(maxLoginAttempts);
+    staffUser.setLockedUntil(Instant.now().minus(1, ChronoUnit.MINUTES));
+    staffRepo.saveAndFlush(staffUser);
+
+    var response = login(staffUser.getEmail(), PASSWORD, StaffLoginResponse.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var reloaded = staffRepo.findById(staffUser.getId()).orElseThrow();
+    assertThat(reloaded.getFailedLoginCount()).isZero();
+    assertThat(reloaded.getLockedUntil()).isNull();
   }
 
   @Test
@@ -344,5 +384,39 @@ public class StaffAuthControllerIT {
     assertThat(body.fieldErrors())
         .extracting(ApiError.FieldError::field)
         .contains("email", "password");
+  }
+
+  /** GETs a path with the given bearer token; the body is irrelevant to these tests. */
+  private ResponseEntity<String> getWithBearer(String path, String token) {
+    var headers = new HttpHeaders();
+    headers.setBearerAuth(token);
+    return restTemplate.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+  }
+
+  @Test
+  void staffToken_onCustomerEndpoint_returnsUnauthorized() {
+    var staffUser = saveStaffUser();
+    var loginBody = login(staffUser.getEmail(), PASSWORD, StaffLoginResponse.class).getBody();
+    assertThat(loginBody).isNotNull();
+
+    var response = getWithBearer("/api/v1/subscribe", loginBody.token());
+
+    // invalid_token, not a bare challenge: the token was read and refused for its audience,
+    // which a request with no token at all would not show.
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+        .contains("invalid_token");
+  }
+
+  @Test
+  void customerToken_onStaffPath_returnsUnauthorized() {
+    var token = jwtIssuer.issueCustomer(UUID.randomUUID()).token();
+
+    // Any path under the staff chain will do: authentication fails before routing.
+    var response = getWithBearer("/api/v1/staff/anything", token);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE))
+        .contains("invalid_token");
   }
 }
