@@ -124,6 +124,8 @@ login).
   the nullable `password_hash` leaves room.
 - **`staff_sessions`.** The table predates the JWT pivot and nothing uses
   it. Dropping it is a separate clean-up, not part of these features.
-- **Customer password reset.** `customer_password_reset_tokens` exists, but
-  no requirement covers a customer flow yet. It's tracked separately, not
-  folded in here.
+- **Customer password change and reset.** Covered separately by `FR-47`–
+  `FR-49` (added 2026-11-17), designed in `password_change_and_reset.md`.
+  `FR-48` should match this flow where the two audiences don't differ.
+- **Staff changing their own password while logged in.** Not covered by
+  `FR-46`; parked in `FUTURE_RELEASES.md`.

@@ -17,26 +17,17 @@ graph LR
     D --> M
     M --> E["Currency Conversion<br/>Rates, caching, fallback,<br/>app log storage<br/>(Wave 5)"]
     M --> N["Two-Factor & Contact Preferences<br/>2FA, SMS, phone verification<br/>(Wave 5.5)"]
-    M --> S["Staff Administration<br/>Invitations, password reset,<br/>roles, refresh tokens<br/>(Wave 5.7)"]
+    M --> S["Staff Administration<br/>Invitations, staff and<br/>customer password reset,<br/>roles, refresh tokens<br/>(Wave 5.7)"]
 
-<<<<<<< Updated upstream
     D --> F["Payments Core<br/>Stripe integration, history,<br/>CD pipeline, edge security<br/>(Wave 6)"]
-=======
-    D --> F["Payments Core<br/>Stripe integration, history,<br/>customer password reset<br/>(Wave 6)"]
->>>>>>> Stashed changes
     E --> F
     B --> F
     S --> F
 
-<<<<<<< Updated upstream
     F --> G["Payment Resilience<br/>ShedLock, retry, refunds,<br/>runtime diagnostics<br/>(Wave 7)"]
     S --> G
-    D --> H["Scheduling & Notifications<br/>Reminders, cleanup jobs<br/>(Wave 8)"]
+    D --> H["Scheduling & Notifications<br/>Reminders, cleanup jobs,<br/>staff-assisted reset<br/>(Wave 8)"]
     G --> H
-=======
-    F --> G["Payment Resilience<br/>Retry, refunds,<br/>runtime diagnostics,<br/>staff-assisted reset<br/>(Wave 7)"]
-    D --> H["Scheduling & Notifications<br/>Reminders, ShedLock<br/>(Wave 8)"]
->>>>>>> Stashed changes
     F --> H
     N --> H
 
@@ -51,7 +42,7 @@ graph LR
     K --> L["Release & Deployment<br/><i>(non-code)</i>"]
 ```
 
-A few things this diagram intentionally does and doesn't show: it's domain-level, not requirement-level (91 individual FR/NFR boxes would be unreadable at this scale — see the backlog for that granularity); branches indicate things that can be worked in parallel (e.g. Subscription Management and Currency Conversion don't depend on each other, only on Auth); and it isn't a strict Gantt/timeline — it's a dependency map, so how long each box takes isn't represented. Project Bootstrap intentionally bundles everything that's one-time setup work with no real ordering dependency among its own parts (env config, Compose, Vault provisioning for every environment, CI/CD, and creating the GitHub Issues from `IMPLEMENTATION_BACKLOG.md`) — splitting these into separate boxes would have implied a sequencing that doesn't actually exist between them.
+A few things this diagram intentionally does and doesn't show: it's domain-level, not requirement-level (97 individual FR/NFR boxes would be unreadable at this scale — see the backlog for that granularity); branches indicate things that can be worked in parallel (e.g. Subscription Management and Currency Conversion don't depend on each other, only on Auth); and it isn't a strict Gantt/timeline — it's a dependency map, so how long each box takes isn't represented. Project Bootstrap intentionally bundles everything that's one-time setup work with no real ordering dependency among its own parts (env config, Compose, Vault provisioning for every environment, CI/CD, and creating the GitHub Issues from `IMPLEMENTATION_BACKLOG.md`) — splitting these into separate boxes would have implied a sequencing that doesn't actually exist between them.
 
 Extracted from `task.pdf`. This version adds a **Status** column assessing whether each requirement is met **by the database schema** (`src/main/resources/db/migration/` — the versioned Flyway migration set — and `subscribe_master_erd.drawio`). Application-layer requirements (endpoints, business logic, libraries, code style, deployment) are marked **N/A** rather than "not met" — the schema can't satisfy those by definition, but where the schema provides the data model needed to support them, that's noted.
 
@@ -119,14 +110,11 @@ Each functional and non-functional requirement in this document has its own GitH
 | FR-42 | Auth & User Management | Staff log-level management: change or reset a logger's level at runtime, saved and applied on every instance, each change audited | Additional | ➖ N/A | New `logger_level_overrides` table and a new `manage_log_levels` permission (granted to `admin` explicitly — `V1.1` only gave `admin` the permissions that existed then). Every instance applies overrides at startup and on a short refresh interval, so changes reach all instances and survive restarts. Each set/reset writes `LOG_LEVEL_CHANGED`/`LOG_LEVEL_RESET` with the staff member as actor (`staff_users.id`) and `{"logger","from","to"}` in `details` (`NFR-41`), plus an INFO log line. Replaces exposing Actuator's `loggers` endpoint, so changes are attributed to a named person, not a shared credential. Not an `NFR-23` conflict: `NFR-23` governs what code logs at every level. Depends on `FR-06` and `NFR-41`. **Not sourced from `task.pdf`.** |
 | FR-43 | Auth & User Management | Staff application-log settings: destination (console, or console + table), minimum table level, and — while the table is on — archive settings (archive after, subfolder, file name pattern, delete archives after) | Additional | ➖ N/A | Read with the existing `view_app_logs`; change with a new `manage_app_log_settings` (granted to `admin`). Archive settings return 409 while the destination is `console`; the archive job keeps draining existing rows under the last saved values. Optimistic locking on save (`NFR-04`); pattern/subfolder validated per `NFR-44`; the response previews the next file name. Each change writes `LOG_SETTINGS_CHANGED` with the staff member as actor and changed fields old → new in `details`. Depends on `FR-06`, `NFR-41`, `NFR-43` and `NFR-44`. **Not sourced from `task.pdf`.** |
 | FR-44 | Auth & User Management | Staff audit-log archive settings (archive after, subfolder, file name pattern, delete archives after), bounded by retention floors set in config | Additional | ➖ N/A | Read with the existing `view_audit_logs`; change with a new `manage_audit_log_settings`, granted to `admin` only, so `auditor` stays read-only over the trail it reviews. Values below the configured floors are rejected (400). Same locking, validation, preview and auditing as `FR-43`. Depends on `FR-06`, `NFR-41` and `NFR-44`. **Not sourced from `task.pdf`.** |
-<<<<<<< Updated upstream
 | FR-45 | Auth & User Management | Staff account administration: create a staff member by invitation, list and view staff, change a role, deactivate and reactivate | Additional | ➖ N/A | Application-level, plus a migration widening `audit_logs_action_check` for the new actions. Endpoints under `/api/v1/staff/users` behind the existing `manage_staff` permission (`V1.1`, granted to `admin`). A new account is saved with `password_hash = NULL` and gets a one-time set-password link by email (`FR-46`), never a temporary password. Deactivate, never delete, since audit rows reference `staff_users.id`; deactivation takes effect on the person's next request because `FR-06` checks `is_active` per request. An admin can't deactivate or demote themselves, and the last active `admin` can't be deactivated or demoted (409), with the active admin rows locked during the check so two simultaneous demotions can't both pass. Every change is audited with the acting staff member as actor and `NFR-41` `details` (for example `STAFF_ROLE_CHANGED` with `{"from","to"}`). Depends on `FR-06`, `FR-46` and `NFR-45`. Closes the gap found 2026-11-12 during `FR-06`: until this exists, the bootstrap admin is the only staff member who can be created without SQL. Proposed design in `staff_account_administration.md`. **Not sourced from `task.pdf`.** |
 | FR-46 | Auth & User Management | Staff password set and reset: one token flow for accepting an invitation, a forgotten password, and an admin-triggered reset | Additional | ➖ N/A | Application-level; uses the existing `staff_password_reset_tokens` table (`V1`: hashed token, `expires_at`, `used_at`), following `customer_email_verification_tokens`' pattern. `POST /api/v1/staff/auth/password` sets the password from a single-use token and clears the lockout counters. `POST /api/v1/staff/auth/password/forgot` always returns the same 202, whether or not the email belongs to an active staff member, and is resend-limited like `FR-40`. An admin can send the link for someone (`FR-45`) but never sees or chooses the password. A new token invalidates earlier unused ones; deactivated accounts get no link. Audited (`STAFF_PASSWORD_RESET_REQUESTED`, `STAFF_PASSWORD_SET`). Depends on `FR-06` and `FR-30` (email delivery). Built before `FR-45`, whose invitations link to it, and testable alone with the bootstrap admin. Proposed design in `staff_account_administration.md`. **Not sourced from `task.pdf`.** |
-=======
-| FR-45 | Auth & User Management | Customer changes their own password while logged in | Additional | ➖ N/A | Application-level; `customers.password_hash` already supports it. Requires the current password as well as the access token, so a stolen token alone can't change it. On success, revokes the customer's refresh tokens and writes a `PASSWORD_CHANGED` audit row (no password values in `details`). See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
-| FR-46 | Auth & User Management | Customer forgot/reset password by email | Additional | ✅ Met | No new table — `customer_password_reset_tokens` (`V1`) is hashed, expiring and single-use (`used_at`). Unauthenticated: the request always gets the same response, so it doesn't reveal whether an account exists, and is rate-limited per account like `FR-40`. The link goes only to the profile email. Completing a reset revokes refresh tokens, clears any lockout (`failed_login_attempts`, `locked_until`) and, for an unverified account, sets `email_verified` (the link proves the customer controls that address). Needs new audit actions in `audit_logs_action_check`. See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
-| FR-47 | Auth & User Management | Staff-assisted password reset for a customer, locked or not | Additional | ✅ Met | No new table or permission — gated by the existing `edit_customers` (`V1.1`, granted to `support_agent` and `admin`). Staff only **send** a reset link through `FR-46`'s flow, to the customer's profile email; they never set or see a password and can't choose another address. Audited with the staff member as actor (`staff_users.id`). Depends on `FR-46` and `FR-06`. Resetting staff passwords is out of scope (see `FUTURE_RELEASES.md`). See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
->>>>>>> Stashed changes
+| FR-47 | Auth & User Management | Customer changes their own password while logged in | Additional | ➖ N/A | Application-level; `customers.password_hash` already supports it. Requires the current password as well as the access token, so a stolen token alone can't change it. On success, revokes the customer's refresh tokens (`FR-05`) and writes a `PASSWORD_CHANGED` audit row (no password values in `details`). Depends on `FR-05`. See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
+| FR-48 | Auth & User Management | Customer forgot/reset password by email | Additional | ✅ Met | No new table — `customer_password_reset_tokens` (`V1`) is hashed, expiring and single-use (`used_at`). The customer counterpart of `FR-46`'s staff flow. Unauthenticated: the request always gets the same response, so it doesn't reveal whether an account exists, and is rate-limited per account like `FR-40`. The link goes only to the profile email. Completing a reset revokes refresh tokens (`FR-05`), clears any lockout (`failed_login_attempts`, `locked_until`) and, for an unverified account, sets `email_verified` (the link proves the customer controls that address). Needs new audit actions in `audit_logs_action_check`. Depends on `FR-05` and `FR-30`. See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
+| FR-49 | Auth & User Management | Staff-assisted password reset for a customer, locked or not | Additional | ✅ Met | No new table or permission — gated by the existing `edit_customers` (`V1.1`, granted to `support_agent` and `admin`). Staff only **send** a reset link through `FR-48`'s flow, to the customer's profile email; they never set or see a password and can't choose another address. Audited with the staff member as actor (`staff_users.id`). Depends on `FR-48` and `FR-06`. Staff passwords are `FR-46`, not this. See `password_change_and_reset.md`. **Not sourced from `task.pdf`.** |
 
 ---
 
@@ -202,19 +190,11 @@ Two paths were considered for closing NFR-18:
 
 ## 4. Summary
 
-<<<<<<< Updated upstream
-**Schema-level requirements fully met:** 34 of the 36 requirements that are actually schema concerns are fully met (FR-03–05, FR-07–09, FR-11–13, FR-15, FR-17, FR-19, FR-21, FR-23–32, FR-40, NFR-04, NFR-05, NFR-07, NFR-13, NFR-17, NFR-18, NFR-33–35, NFR-41); the remaining 2 (FR-06, NFR-03) are Partial — see below. Of the 94 requirements in total, the other 58 are N/A.
-=======
-**Schema-level requirements fully met:** 35 of the 37 requirements that are actually schema concerns are fully met (FR-03–05, FR-07–09, FR-11–13, FR-15, FR-17, FR-19, FR-21, FR-23–32, FR-40, FR-46, FR-47, NFR-04, NFR-05, NFR-07, NFR-13, NFR-17, NFR-18, NFR-33–35); the remaining 2 (FR-06, NFR-03) are Partial — see below. Of the 91 requirements in total, the other 54 are N/A.
->>>>>>> Stashed changes
+**Schema-level requirements fully met:** 36 of the 38 requirements that are actually schema concerns are fully met (FR-03–05, FR-07–09, FR-11–13, FR-15, FR-17, FR-19, FR-21, FR-23–32, FR-40, FR-48, FR-49, NFR-04, NFR-05, NFR-07, NFR-13, NFR-17, NFR-18, NFR-33–35, NFR-41); the remaining 2 (FR-06, NFR-03) are Partial — see below. Of the 97 requirements in total, the other 59 are N/A.
 **Partial:** FR-06 (RBAC implemented differently than spec'd), NFR-03 (constraints help but transactions are app-level).
 
 **Still open:** none at the schema level. FR-06 and NFR-03 remain Partial by design, not by gap — see their notes above.
 
 **Recent updates:** FR-09 was Met from the outset — the `status` CHECK constraint and default value used uppercase (`'ACTIVE'`, etc.) in `V2` from the start, per that migration's own header comment; no later casing fix was needed.
 
-<<<<<<< Updated upstream
-**Not applicable to schema:** the remaining 58 requirements are endpoints, libraries, code patterns, testing, or deployment concerns that a database schema cannot satisfy on its own — most of them already have the supporting tables/columns/indexes in place for the application layer to build on.
-=======
-**Not applicable to schema:** the remaining 54 requirements are endpoints, libraries, code patterns, testing, or deployment concerns that a database schema cannot satisfy on its own — most of them already have the supporting tables/columns/indexes in place for the application layer to build on.
->>>>>>> Stashed changes
+**Not applicable to schema:** the remaining 59 requirements are endpoints, libraries, code patterns, testing, or deployment concerns that a database schema cannot satisfy on its own — most of them already have the supporting tables/columns/indexes in place for the application layer to build on.

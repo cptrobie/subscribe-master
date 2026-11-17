@@ -189,7 +189,7 @@ Subscription routes only ever return the caller's own rows (FR-04); a concurrent
 | `design-docs/white_label_branding_and_multipart_email.md` | Draft: per-deployment white-label branding, and the future plain-text → multipart (text + HTML) email refactor |
 | `design-docs/actuator_observability.md` | Actuator baseline, health model, metrics contract and observability wave placement — `NFR-36`–`NFR-42` |
 | `design-docs/resend_verification_sequence.md` | Sequence and flow diagrams, and the 9 settled decisions, for resending the verification email — `FR-40` |
-| `design-docs/password_change_and_reset.md` | Customer password change and reset by email, and staff-assisted reset (send link only) — `FR-45`–`FR-47` |
+| `design-docs/password_change_and_reset.md` | Customer password change and reset by email, and staff-assisted reset of a customer's password (send link only) — `FR-47`–`FR-49` |
 
 
 ---
