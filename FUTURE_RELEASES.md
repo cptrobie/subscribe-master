@@ -129,15 +129,12 @@ These are rough notes, not requirements: no IDs, no sizes, no waves.
     provider's user id to `staff_users.id` so `audit_logs` stays consistent.
   - Pays off in several places at once: Spring Boot Admin (option 4 below),
     microservices (one login for every service), and SSO-only staff accounts.
-- **Staff password change and reset** — **(you, 2026-11-17)**
-  - Staff changing their own password, and one staff member resetting
-    another's. Split out when the customer versions were scheduled (`FR-45`–
-    `FR-47`, see `design-docs/password_change_and_reset.md`).
-  - Only a certain role should be able to reset another staff member's
-    password. **Which role is still to be decided** (`admin` via the existing
-    `manage_staff` permission is the obvious candidate).
-  - The schema is ready: `staff_password_reset_tokens` (`V1`), and the staff
-    lockout columns from `V13`.
+- **Staff change their own password while logged in** — **(you, 2026-11-17)**
+  - The one staff password flow not yet scheduled. `FR-46` (Wave 5.7) already
+    covers invitations, forgotten passwords and an admin-triggered reset behind
+    `manage_staff`; this adds the logged-in change, the staff counterpart of
+    the customer's `FR-47` (see `design-docs/password_change_and_reset.md`).
+  - Should require the current password, as `FR-47` does.
   - Would become unnecessary for SSO-only staff accounts if the single sign-on
     item above is done first.
 - **Spring Boot Admin (SBA) as the operations console** — **(you + suggested,

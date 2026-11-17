@@ -181,31 +181,21 @@ Rebalanced on 2026-10-23, when Wave 8 would otherwise have reached 128h. Estimat
 
 | Wave | Hours | | Wave | Hours |
 |---|---|---|---|---|
-<<<<<<< Updated upstream
 | 1 (complete) | 92 | | 6 | 72 |
 | 2 | 60 | | 7 | 60 |
-| 4 | 40 | | 8 | 52 |
-=======
-| 1 (complete) | 92 | | 6 | 76 |
-| 2 | 68 | | 7 | 64 |
-| 4 | 36 | | 8 | 64 |
->>>>>>> Stashed changes
+| 4 | 40 | | 8 | 64 |
 | 4.5 | 72 | | 9 | 64 |
 | 5 | 56 | | 10 | 64 |
 | 5.5 | 76 | | 11 | 36 |
-| 5.7 | 52 | | | |
+| 5.7 | 68 | | | |
 
 A wave under 60h is fine when there's a reason:
 - **Wave 4:** it's the last stop before 4.5, so padding it only delays the modulith wave.
 - **Wave 11:** it's verification, not build work.
-- **Wave 8:** `FR-21` moved to Wave 7, where `FR-29` first needs it; the rest of Wave 8 is one notification chain that stays together.
-- **Wave 5.7:** its two staff features have to land between Wave 4.5 and the first deployment in Wave 6. Pulling more in would mean moving items whose dependencies or rationale tie them to their current wave.
 
-<<<<<<< Updated upstream
 Wave 4's figure includes `NFR-35` (S) and `NFR-47` (S). On 2026-11-12: `NFR-46` (S) was added to Wave 2 and `NFR-48` (M) to Wave 6 directly after `NFR-21` (taking it to 72h, above the 70h target but under the 80h cap), `FR-21` moved from Wave 8 to Wave 7 ahead of `FR-29`'s schedulers, and Wave 5.7 was inserted for staff administration (`FR-45`, `FR-46`), taking `FR-05` from Wave 2 and `FR-41` from Wave 7. That leaves Wave 2 at 60h, Wave 6 at 72h, Wave 7 at 60h, Wave 8 at 52h and Wave 5.7 at 52h. Wave 4.5's includes `NFR-45` (S), added 2026-11-07, which takes it to 72h: above the 70h target but under the 80h cap. The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
-=======
-Wave 4's figure includes `NFR-35` (S). Wave 4.5's includes `NFR-45` (S), added 2026-11-07, which takes it to 72h: above the 70h target but under the 80h cap. On 2026-11-17 the password requirements were added: `FR-45` (S) and `FR-46` (M) take Wave 6 from 60h to 76h, and `FR-47` (M) takes Wave 7 from 52h to 64h. Wave 6 had been under 60h because `NFR-21` is blocked until hosting is chosen; the new items give it work that doesn't wait on that. See `design-docs/password_change_and_reset.md` ("Scheduling"). The full reasoning for each move is in `design-docs/actuator_observability.md` ("Wave placement") and `design-docs/contact_preferences_and_sms.md` ("Scheduling"). `scripts/one_time/wave_rebalance_2026-10-23.sh` relabels the moved issues.
->>>>>>> Stashed changes
+
+On 2026-11-17 the customer password requirements were added: `FR-47` (S) and `FR-48` (M) take Wave 5.7 from 52h to 68h, and `FR-49` (M) takes Wave 8 from 52h to 64h. Both waves had been under 60h with a recorded reason; now neither is. See `design-docs/password_change_and_reset.md` ("Scheduling").
 
 ## Wave status markers
 
@@ -381,12 +371,16 @@ None of these are needed before Wave 4.5, which only waits on Wave 2's RBAC work
 - **before Wave 6**, the first real deployment (`NFR-21`), since a deployed system with one admin and no way to add staff isn't usable;
 - **before Wave 7**, whose `FR-28` needs a `billing_admin` and whose diagnostics need `auditor` staff, neither of which can exist before `FR-45`.
 
-To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (customer refresh tokens; no dependencies, and building it after Wave 4.5 puts it in the right module) and `FR-41` from Wave 7 (a staff endpoint, so it sits with the other staff work). Wave 2 drops to 60h and Wave 7 to 60h. Nothing in either wave depended on the moved items. Order: `FR-46` → `FR-45` → `FR-41`; `FR-05` can go anywhere. About 52h. See `design-docs/staff_account_administration.md`.
+To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (customer refresh tokens; no dependencies, and building it after Wave 4.5 puts it in the right module) and `FR-41` from Wave 7 (a staff endpoint, so it sits with the other staff work). Wave 2 drops to 60h and Wave 7 to 60h. Nothing in either wave depended on the moved items. Order: `FR-46` → `FR-45` → `FR-41`; `FR-05` can go anywhere, but before `FR-47`/`FR-48`, which revoke its refresh tokens. About 68h. See `design-docs/staff_account_administration.md`.
+
+**Customer password change/reset (`FR-47`, `FR-48`), added 2026-11-17.** This is the token-lifecycle wave: `FR-48` is the customer counterpart of `FR-46`'s staff reset flow, and both need `FR-05`'s refresh tokens to revoke. Takes the wave from 52h to 68h. See `design-docs/password_change_and_reset.md`.
 
 - `[FR-46] Staff password set and reset (invitation, forgot password, admin-triggered)` — **[M]** — depends on `FR-06` and `FR-30`; **first**, because `FR-45`'s invitations link to it. Uses the existing `staff_password_reset_tokens` table. Testable alone with the bootstrap admin. **Not sourced from `task.pdf`.**
 - `[FR-45] Staff account administration (create by invitation, list, change role, deactivate/reactivate)` — **[L]** — depends on `FR-06`, `FR-46` and `NFR-45`; behind `manage_staff`. Includes the last-active-admin guard. **Not sourced from `task.pdf`.**
 - `[FR-41] Staff system status endpoint (read-only, RBAC)` — **[S]** — depends on `NFR-36`, `NFR-38` and `FR-06` (Wave 2); uses the existing `view_system_health` permission. See `actuator_observability.md`.
 - `[FR-05] Refresh token mechanism` — **[M]** — pairs with the short-lived (15min) JWT access tokens `JwtIssuer` already issues; `customer_refresh_tokens` (already scaffolded, including `ip_address`/`user_agent` for tracking usage context) is the intended home for this *(Moved from Wave 2 on 2026-11-12.)*
+- `[FR-47] Customer changes their own password while logged in` — **[S]** — depends on `FR-05`. Requires the current password; revokes refresh tokens. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
+- `[FR-48] Customer forgot/reset password by email` — **[M]** — depends on `FR-05` and `FR-30`; uses `customer_password_reset_tokens` (`V1`). Completing a reset clears any lockout and verifies an unverified email. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
 
 ## Wave 6 — Payments core
 
@@ -395,14 +389,7 @@ To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (cu
 - `[FR-12] Payment history persistence, including after subscription cancellation` — **[L]**
 - `[NFR-03] Transactional integrity on money-related operations` — **[M]**
 - `[NFR-21] CD pipeline: automated deployment to staging/prod` — **[L]** *(blocked — do not start until a hosting platform is chosen; see `subscribe_master_requirements.md` for the full prerequisite list. Placed here because this wave completes the "Waves 0–6" milestone, the first point where deploying something actually means anything.)*
-<<<<<<< Updated upstream
 - `[NFR-48] Staff API restricted at the network edge; real client IP in audit logs behind the proxy` — **[M]** — depends on `NFR-21`; **directly after it in this wave** (moved from Wave 7 on 2026-11-12), so the first real deployment never has the staff API open to the internet or an audit trail full of the proxy's address. Edge rules keep `/api/v1/staff/**` off the internet; `server.forward-headers-strategy`, trusting only the proxy, keeps audit `ip_address` correct. See `NFR-48`'s notes in `subscribe_master_requirements.md`.
-=======
-- `[FR-45] Customer changes their own password while logged in` — **[S]** — no dependencies. Requires the current password; revokes refresh tokens. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
-- `[FR-46] Customer forgot/reset password by email` — **[M]** — no dependencies; uses `customer_password_reset_tokens` (`V1`). Completing a reset clears any lockout and verifies an unverified email. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
-
-**Password change/reset (`FR-45`, `FR-46`), added 2026-11-17.** Placed by size, not theme: Wave 5.5 (76h) and Wave 6 couldn't take all three password requirements without passing 80h, and Wave 4 would mean writing auth code before Wave 4.5's module boundaries. Neither depends on payments, so they can be done in any order within this wave, or while `NFR-21` is blocked. Takes this wave from 60h to 76h. `FR-47`, the staff-assisted reset, is in Wave 7.
->>>>>>> Stashed changes
 
 ## Wave 7 — Payment resilience & runtime diagnostics
 
@@ -412,19 +399,19 @@ To bring it into the 60–70h range, two items moved in: `FR-05` from Wave 2 (cu
 - `[FR-29] Payment retry / dunning (up to 3 attempts)` — **[L]**
 - `[FR-28] Partial refund support` — **[M]** — also blocked on `FR-06`: `billing_admin`'s ability to issue refunds per `ARCHITECTURE.md`'s role description means nothing until staff permission enforcement actually exists; see `staff_authorization_design.md`
 - `[FR-42] Staff log-level management (persisted, audited)` — **[M]** — depends on `FR-06` and `NFR-41` (Wave 2). Each change is audited with the staff member as actor and old/new levels in `details`.
-- `[FR-47] Staff-assisted password reset for a customer (locked or not)` — **[M]** — depends on `FR-46` (Wave 6) and `FR-06` (Wave 2). Gated by the existing `edit_customers`; staff only send `FR-46`'s reset link to the customer's profile email. Added 2026-11-17, taking this wave from 52h to 64h. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
 
 ## Wave 8 — Scheduling & notifications
 
 **Rationale:** depends on Wave 3 (needs `next_payment_date` to check against) and benefits from Wave 6 existing (a real payment flow to warn about).
 
-**Contact-preference set, last piece (`FR-39`).** `FR-36`–`FR-38` are built in Wave 5.5 (`FR-37`/`FR-38` moved there from this wave in the 2026-10-23 rebalance, which also moved `NFR-44`/`FR-44` to Wave 9 instead of here). `FR-21` (ShedLock) moved to Wave 7 on 2026-11-12, ahead of `FR-29`'s schedulers, so it's already in place here. Order within this wave: `FR-18` → `FR-32` → `FR-20` (abstraction, wrapping `FR-37`'s `SmsSender`) → `FR-39` (text 2FA, amending `FR-33`) → `FR-19` routing by `preferred_contact_method`. About 64h, including the +8h from `FR-20` growing S → M.
+**Contact-preference set, last piece (`FR-39`).** `FR-36`–`FR-38` are built in Wave 5.5 (`FR-37`/`FR-38` moved there from this wave in the 2026-10-23 rebalance, which also moved `NFR-44`/`FR-44` to Wave 9 instead of here). `FR-21` (ShedLock) moved to Wave 7 on 2026-11-12, ahead of `FR-29`'s schedulers, so it's already in place here. Order within this wave: `FR-18` → `FR-32` → `FR-20` (abstraction, wrapping `FR-37`'s `SmsSender`) → `FR-39` (text 2FA, amending `FR-33`) → `FR-19` routing by `preferred_contact_method`; `FR-49` can go anywhere. About 64h, including the +8h from `FR-20` growing S → M and `FR-49` (M), added 2026-11-17.
 
 - `[FR-18] Daily scheduled payment-due check` — **[S]**
 - `[FR-19] Payment-due warning notification (log/email/text)` — **[M]** — delivered on the customer's preferred contact method (`FR-36`); `notification_log.channel`'s CHECK must add `'sms'`
 - `[FR-20] Notification strategy abstraction (Strategy pattern)` — **[M]** *(revised from [S] — now also wraps `FR-37`'s `SmsSender` as a second strategy and selects between email and text from `preferred_contact_method`, with an email fallback on Twilio failure. See `contact_preferences_and_sms.md`.)*
 - `[FR-39] 2FA code delivered on the preferred contact channel (email/text, email fallback on Twilio failure)` — **[M]** — amends `FR-33`; depends on `FR-33` and `FR-38`. **Not sourced from `task.pdf`.** See `contact_preferences_and_sms.md`.
 - `[FR-32] Unverified account cleanup (24h expiry) + expired refresh-token cleanup (customer_refresh_tokens.expires_at)` — **[M]** — retargeted from customer_sessions during the JWT pivot; customer_refresh_tokens is now the stateful, DB-backed table with the same unbounded-growth problem
+- `[FR-49] Staff-assisted password reset for a customer (locked or not)` — **[M]** — depends on `FR-48` (Wave 5.7) and `FR-06` (Wave 2). Gated by the existing `edit_customers`; staff only send `FR-48`'s reset link to the customer's profile email. Placed here by size (Wave 5.7 would reach 80h, Wave 7 72h); added 2026-11-17. **Not sourced from `task.pdf`.** See `password_change_and_reset.md`.
 
 ## Wave 9 — Reporting, statistics & log retention
 
