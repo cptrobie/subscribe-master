@@ -30,9 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
  * GlobalExceptionHandler} turns their exceptions into responses: {@code
  * InvalidCredentialsException} into 401 and {@code AccountLockedException} into 429.
  *
- * <p>The path is open to unauthenticated callers through a temporary {@code permitAll()} entry in
- * {@code SecurityConfig}'s single chain. It moves to the staff chain in step 5 of FR-06, when the
- * customer and staff chains are split.
+ * <p>The path is open to unauthenticated callers through the staff chain's {@code permitAll()}
+ * entry for {@code /api/v1/staff/auth/**} in {@code SecurityConfig}. Every other staff path needs
+ * the {@code staff-api} token this endpoint issues.
  */
 @RestController
 @RequestMapping("/api/v1/staff/auth")

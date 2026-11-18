@@ -17,36 +17,56 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * The single HTTP security filter chain: stateless JWT resource server, deny-by-default.
+ * HTTP security: two stateless JWT resource-server filter chains, one for staff and one for
+ * customers, both deny-by-default (FR-06).
  *
- * <p><b>What is public.</b> {@code /api/v1/auth/**} (FR-01 register, FR-02 login, FR-30
- * verify-email, FR-40 resend-verification) must be reachable without a token -- that's the entire
- * point of them. The OpenAPI endpoints ({@code /v3/api-docs/**}, {@code /swagger-ui/**}, {@code
- * /swagger-ui.html}) are public too, so NFR-09's docs work in local dev without a token. Spring
- * Security's own default (nothing permitted) blocked all of these before this bean existed: every
- * request, including the deliberately public auth endpoints, returned 401.
+ * <p><b>Why two chains.</b> Staff and customer tokens are signed with the same key, so the
+ * signature alone can't tell them apart. {@code JwtIssuer} sets {@code aud}: {@code staff-api} on
+ * staff tokens, {@code customer-api} on customer tokens. Each chain's decoder accepts only its own
+ * audience. Without that, a staff token would pass the customer chain and its {@code sub} would be
+ * read as a customer id. A token sent to the wrong chain gets a 401 with {@code invalid_token}.
  *
- * <p><b>What is protected.</b> Everything else requires a valid bearer JWT, which today means the
- * whole of {@code /api/v1/subscribe/**} ({@code SubscriptionController}) plus the hidden Wave 6
- * payment scaffolding. Tokens are RS256 access tokens issued by {@code JwtIssuer} (15 minutes,
- * {@code app.jwt.access-token-duration-minutes}) and verified by the {@link JwtDecoder} bean
- * against the public key loaded from Vault ({@code jwt.public-key}, PEM). Controllers read the
- * caller's identity from the token's {@code sub} claim via {@code @AuthenticationPrincipal Jwt} --
- * never from a client-supplied id -- which is how FR-04's per-customer data isolation holds.
+ * <ul>
+ *   <li><b>Staff chain</b> ({@code @Order(1)}, {@code /api/v1/staff/**} only). Staff login, {@code
+ *       /api/v1/staff/auth/**}, is public; every other staff path needs a {@code staff-api} token.
+ *       {@link StaffJwtAuthenticationConverter} then loads the user's permissions from the database
+ *       on every request and makes them the authorities, so access changes and deactivations apply
+ *       on the next request. An unknown or deactivated staff user gets a 401.
+ *   <li><b>Customer chain</b> ({@code @Order(2)}, every other path). Public: {@code
+ *       /api/v1/auth/**} (FR-01 register, FR-02 login, FR-30 verify-email, FR-40
+ *       resend-verification) and the OpenAPI endpoints ({@code /v3/api-docs/**}, {@code
+ *       /swagger-ui/**}, {@code /swagger-ui.html}), so NFR-09's docs work in local dev. Everything
+ *       else, today {@code /api/v1/subscribe/**} and the hidden Wave 6 payment scaffolding, needs a
+ *       {@code customer-api} token. Controllers read the caller from the token's {@code sub} via
+ *       {@code @AuthenticationPrincipal Jwt}, never from a client-supplied id, which is how FR-04's
+ *       per-customer data isolation holds.
+ * </ul>
+ *
+ * <p>The order matters: Spring uses the first chain whose matcher fits the request, and the
+ * customer chain matches everything, so the staff chain must come first.
+ *
+ * <p><b>Tokens.</b> RS256 access tokens issued by {@code JwtIssuer} (15 minutes, {@code
+ * app.jwt.access-token-duration-minutes}), verified against the public key from Vault ({@code
+ * jwt.public-key}, PEM). There is deliberately no {@link JwtDecoder} bean: each chain builds its
+ * own through {@link #audienceDecoder}, because two decoder beans would make Spring Boot's
+ * auto-configuration ambiguous.
+ *
+ * <p><b>Permission checks.</b> {@code @EnableMethodSecurity} lets staff endpoints use
+ * {@code @PreAuthorize("hasAuthority('some_permission')")}. Endpoints check a permission name,
+ * never a role; see {@code design-docs/staff_authorization_design.md}.
  *
  * <p><b>What is deliberately absent.</b>
  *
  * <ul>
- *   <li>No role or permission checks: every authenticated principal is a customer. Staff
- *       authorization (FR-06, Wave 2) will add a second chain or authority mapping for {@code
- *       staff_users}; see {@code design-docs/staff_authorization_design.md}.
- *   <li>No session and no CSRF: the API is stateless and token-based, so CSRF is disabled rather
- *       than configured.
- *   <li>No Actuator rules yet: NFR-36 (Wave 2) adds the management port with its own chain.
+ *   <li>No session and no CSRF, in either chain: the API uses no cookies, and a browser never adds
+ *       an {@code Authorization: Bearer} header on its own, so CSRF is disabled rather than
+ *       configured. Each chain builds its own filters, so both disable it.
+ *   <li>No Actuator rules yet: NFR-36 adds the management port with its own chain.
  * </ul>
  *
  * <p>"Deny by default, permit explicitly" is the posture to keep as endpoints are added: a new
- * public route needs an entry in the {@code permitAll()} list, and the test suite should prove it.
+ * public route needs an entry in its chain's {@code permitAll()} list, and the test suite should
+ * prove it.
  */
 @Configuration
 @EnableMethodSecurity
@@ -58,6 +78,12 @@ public class SecurityConfig {
     this.publicKey = PemKeys.parsePublicKey(publicKeyPem);
   }
 
+  /**
+   * A decoder for one audience: the default checks (signature, expiry, not-before) plus {@code aud}
+   * containing {@code audience}. Deliberately not a bean; see the class Javadoc.
+   *
+   * @param audience {@link JwtAudiences#STAFF} or {@link JwtAudiences#CUSTOMER}
+   */
   private JwtDecoder audienceDecoder(String audience) {
     var decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
     decoder.setJwtValidator(

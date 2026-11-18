@@ -224,6 +224,7 @@ public class StaffAuthControllerIT {
         auditLogRepo.findByActorIdAndAction(staffUser.getId(), AuditAction.STAFF_LOGGED_IN);
     assertThat(audits).hasSize(1);
     assertThat(audits.get(0).getActorType()).isEqualTo(ActorType.STAFF);
+    assertThat(audits.get(0).getIpAddress()).isNotBlank();
   }
 
   @Test
