@@ -68,8 +68,20 @@ This project started from a take-home assignment brief and has since grown into 
      spring.datasource.password=local_dev_only_not_a_real_secret \
      jwt.private-key=@src/main/resources/local-dev-keys/jwt-private.pem \
      jwt.public-key=@src/main/resources/local-dev-keys/jwt-public.pem \
-     app.idempotency.hmac-secret=local_dev_only_not_a_real_secret
+     app.idempotency.hmac-secret=local_dev_only_not_a_real_secret \
+     app.staff.bootstrap-admin.email=admin@localhost.test \
+     app.staff.bootstrap-admin.password=local_dev_only_not_a_real_secret
    ```
+
+   **Already seeded before the staff bootstrap admin existed?** Add just those two keys with `patch`:
+
+   ```
+   vault kv patch -address=http://localhost:8200 secret/subscribe-master \
+     app.staff.bootstrap-admin.email=admin@localhost.test \
+     app.staff.bootstrap-admin.password=local_dev_only_not_a_real_secret
+   ```
+
+   `app.staff.bootstrap-admin.*` creates the first `admin` staff user at startup, but only when `staff_users` is empty (FR-06). Once that admin exists, the keys are ignored. Leave both unset and no admin is created; the app still starts.
 
    **Already seeded before `app.idempotency.hmac-secret` existed?** Add just that key with `patch`, not `put` -- `vault kv put` replaces every key at the path, which would wipe the database credentials and JWT keys:
 
@@ -82,7 +94,7 @@ This project started from a take-home assignment brief and has since grown into 
 
    **No SMTP credentials are needed locally** — Mailpit accepts mail without authentication. Production is different: its SMTP credentials live in Vault under the same path, as `spring.mail.username` and `spring.mail.password` (see `ARCHITECTURE.md` §9).
  
-6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same five key/value pairs.
+6. Or via the browser UI at `http://localhost:8200` — sign in with `local-dev-root-token`, go to **Secrets Engines → secret/ → Create secret**, set the path to `subscribe-master`, and add the same seven key/value pairs.
 
    Without this step, the app fails to start — Vault's dev-mode container starts empty; nothing is seeded into it automatically just because Postgres itself is running.
 7. **Build, test and run the application:**
