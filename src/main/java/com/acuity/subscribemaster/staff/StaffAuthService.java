@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Staff login (FR-06): checks the credentials, issues a staff access token and records the login in
- * the audit log (NFR-17). Staff accounts are never self-registered, so there's no registration or
+ * the audit log (NFR-17). Everything about an already signed-in staff user is in {@link
+ * StaffService}. Staff accounts are never self-registered, so there's no registration or
  * email-verification step here, unlike the customer {@link
  * com.acuity.subscribemaster.auth.AuthService}.
  *
