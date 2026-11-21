@@ -6,33 +6,32 @@ mechanism that turns the already-seeded `roles`/`permissions`/`role_permissions`
 schema into actual enforced behavior. Supersedes prior in-chat discussion —
 this is the single source of truth going forward.
 
-## Current state — confirmed by reading the code, not assumed
+## Starting point — before FR-06
 
-As of this writing, staff authentication and authorization do not exist
-anywhere in the running application:
+When this design was written, staff authentication and authorization didn't
+exist anywhere in the running application (confirmed by reading the code):
 
-- No `StaffController`, no staff login endpoint, no staff JWT issuance.
-  `JwtIssuer.issue(UUID customerId)` only ever issues tokens for customers.
-- Zero `@PreAuthorize`/`hasRole`/`hasAuthority`/`PermissionEvaluator` usage
-  anywhere in `src/main/java`.
-- `SecurityConfig`'s filter chain makes exactly one distinction: public
-  (`/api/v1/auth/**`, docs) vs. "any authenticated principal." Its own
-  Javadoc acknowledges this was a deliberate placeholder ("there's no real
-  authenticated endpoint to protect yet") written early in the project and
-  never revisited as real authenticated endpoints were built on top of it.
-- The `roles` → `role_permissions` → `permissions` schema (V1/V1.1) is fully
+- There was no staff controller, no staff login endpoint and no staff JWT
+  issuance. `JwtIssuer` only ever issued tokens for customers.
+- Nothing in `src/main/java` used `@PreAuthorize`, `hasRole`,
+  `hasAuthority` or a `PermissionEvaluator`.
+- `SecurityConfig`'s single filter chain made exactly one distinction:
+  public (`/api/v1/auth/**`, docs) vs. "any authenticated principal." Its own
+  Javadoc called this a deliberate placeholder, written early in the project
+  and never revisited as real authenticated endpoints were built on top of it.
+- The `roles` → `role_permissions` → `permissions` schema (V1/V1.1) was fully
   seeded (`admin`, `support_agent`, `billing_admin`, `auditor`, each with a
   distinct, non-overlapping permission set per `ARCHITECTURE.md`), but
-  nothing in the application reads it. It's a correct design sitting idle.
+  nothing in the application read it.
 
 **This is not limited to the feature that surfaced it** (`FR-35`, staff
 provider-catalog management — see `provider_catalog_management.md`). It's a
 cross-cutting gap affecting every staff-differentiated feature already in
 the backlog, most concretely `FR-28` (partial refunds, Wave 7) — `billing_admin`
 "can issue refunds" per `ARCHITECTURE.md`'s role description, but that
-means nothing until this mechanism exists. `FR-28`'s backlog entry should
-carry an explicit "blocked on `FR-06`" note, the same way `FR-33` noted its
-block on `FR-30` (since resolved).
+means nothing until this mechanism exists. `FR-28`'s backlog entry carries
+an explicit "blocked on `FR-06`" note, the same way `FR-33` noted its block on
+`FR-30` (since resolved).
 
 ## DECIDED: permission-based checks, not hardcoded role checks
 
@@ -67,12 +66,14 @@ settled on 2026-11-09, and are recorded in the four sections that follow.
 
 ## DECIDED: permissions are looked up per request, not carried in the token
 
-The staff chain's JWT authentication converter reads the token's `sub`
-(the `staff_users.id`) and runs one JPQL query. The query returns the
-names of that user's permissions through `role` → `role_permissions` →
-`permissions`, and only if `is_active = true`. Each name becomes a plain
-`GrantedAuthority`, with no `ROLE_`/`SCOPE_` prefix, so endpoints check
-`hasAuthority('view_audit_logs')`. The JWT itself carries no permissions.
+The staff chain's JWT authentication converter,
+`StaffJwtAuthenticationConverter`, reads the token's `sub` (the
+`staff_users.id`) and loads that user with their role and the role's
+permissions in one query (`StaffUserRepository.findWithRoleAndPermissionsById`,
+a derived query with an `@EntityGraph`). If the user is active, each
+permission name becomes a plain `GrantedAuthority`, with no `ROLE_`/`SCOPE_`
+prefix, so endpoints check `hasAuthority('view_audit_logs')`. The JWT itself
+carries no permissions.
 
 - **Why:** revoking a permission (a `role_permissions` change) or
   deactivating a staff member takes effect on that person's very next
@@ -83,13 +84,19 @@ names of that user's permissions through `role` → `role_permissions` →
 - **Cost accepted:** one indexed query per staff request. Staff traffic is
   tiny compared with customer traffic. A short cache can be added later if
   measurements ever call for it, without changing any endpoint.
-- **Inactive or deleted staff:** an empty result is treated as an invalid
-  token (401), not as an authenticated user with no permissions (403).
+- **Inactive or deleted staff:** no row, or `is_active = false`, is treated
+  as an invalid token (401 `invalid_token`), not as an authenticated user
+  with no permissions (403). So is a missing or malformed `sub`. All of
+  these use the same message, because it reaches the client in the
+  `WWW-Authenticate` header and mustn't show whether an account exists or is
+  deactivated.
+- **No permissions:** an active user whose role has none is authenticated
+  with no authorities, and gets 403 only on endpoints that require one.
 - **Rejected:** permissions as JWT claims. They avoid the query, but leave
   the staleness window above, and they make "access changes are a data
   change" true only after a delay.
-- Follows NFR-15 (a JPQL fetch query, no eager associations) and NFR-16
-  (no native SQL).
+- Follows NFR-15 (the mappings stay lazy; only this query fetches eagerly)
+  and NFR-16 (no native SQL).
 
 ## DECIDED: staff and customer tokens are told apart by `aud`, with two filter chains
 
@@ -108,13 +115,20 @@ changes close that gap:
     `aud = customer-api`, and its behaviour is otherwise unchanged.
 - `@EnableMethodSecurity` is turned on, so staff endpoints can use
   `@PreAuthorize("hasAuthority('...')")`.
+- A token sent to the wrong chain gets 401 `invalid_token`: a staff token on
+  a customer path, and a customer token on any staff path, before routing.
+- There is deliberately no `JwtDecoder` bean. Each chain builds its own
+  decoder (`JwtAudienceValidator` on top of the default validators), because
+  two decoder beans would make Spring Boot's auto-configuration ambiguous.
+  Both chains disable CSRF: the API uses no cookies, and every protected call
+  needs a bearer header, which a browser never adds on its own.
 - **Deploy impact, accepted:** customer tokens issued before the deploy
   have no `aud`, so they are rejected and those customers must log in
   again. Tokens last at most 15 minutes.
 - **Rejected:** a custom `principal_type` claim. It does the same job, but
   it's non-standard and its validator would be hand-written; `aud` is the
   registered claim built for exactly this purpose.
-- NFR-36's actuator chain will sit alongside these two later, on its own
+- NFR-36's actuator chain will be a third, alongside these two, on its own
   management port.
 
 ## DECIDED: staff login has its own, stricter lockout
@@ -155,7 +169,7 @@ sooner.
 ## DECIDED: the first admin is created from configuration at startup
 
 No staff users are seeded, and creating staff (`manage_staff`) is a later
-feature. When the application starts, a bootstrap runner checks two
+feature: `FR-45`/`FR-46`, staff account administration. When the application starts, a bootstrap runner checks two
 things: is `staff_users` empty, and are both
 `app.staff.bootstrap-admin.email` and `app.staff.bootstrap-admin.password`
 set (supplied from Vault, never committed)? If both are true, it creates
@@ -177,9 +191,13 @@ does nothing, so it's safe on every restart and every instance.
 
 ## Proving the mechanism
 
-FR-06 adds one real endpoint, `GET /api/v1/staff/me`, which returns the
-caller's email, role and permissions. It requires authentication but no
-particular permission. The 403 path is proved by a test-only controller
+FR-06 adds one real endpoint, `GET /api/v1/staff/me` (`StaffController`),
+which returns the caller's id, email, role name and permission names, sorted.
+It requires a staff token but no particular permission. The role name is for
+display only. The lookup lives in `StaffService`, which is meant for staff
+operations other than login (staff account administration included);
+`StaffAuthService` keeps login, the one staff operation that runs without a
+token. The 403 path is proved by a test-only controller
 that uses `@PreAuthorize("hasAuthority('view_audit_logs')")`. The
 integration tests cover:
 
