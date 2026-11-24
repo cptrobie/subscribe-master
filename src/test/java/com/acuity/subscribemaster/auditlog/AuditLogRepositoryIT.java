@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -20,9 +22,16 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * Verifies AuditLog actually round-trips through real Postgres for the columns that use native
  * Postgres types: {@code @JdbcTypeCode(SqlTypes.INET)} persists and reads back a String against
  * {@code inet}, and {@code @JdbcTypeCode(SqlTypes.JSON)} does the same for a {@code Map} against
- * {@code jsonb} ({@code details}, NFR-41). Uses @DataJpaTest rather than the full
- * SubscribeMasterApplicationIT pattern, since this only needs the JPA layer, not the whole
- * application context or Vault.
+ * {@code jsonb} ({@code details}, NFR-41).
+ *
+ * <p>It also proves that every {@link AuditAction} value is accepted by {@code
+ * audit_logs_action_check} and reads back unchanged through {@link AuditActionConverter}. The enum
+ * and the constraint are maintained separately (a new value needs a migration, as in V11 and V13),
+ * and a value missing from the constraint would otherwise only fail at runtime, the first time that
+ * action is audited. Values are taken from the enum itself, so new ones are covered automatically.
+ *
+ * <p>Uses @DataJpaTest rather than the full SubscribeMasterApplicationIT pattern, since this only
+ * needs the JPA layer, not the whole application context or Vault.
  */
 @Testcontainers
 @DataJpaTest
@@ -106,5 +115,25 @@ public class AuditLogRepositoryIT {
     AuditLog fetched = repository.findById(saved.getId()).orElseThrow(); // real SELECT
 
     assertThat(fetched.getDetails()).isNull();
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @EnumSource(AuditAction.class)
+  void everyAuditActionIsAcceptedByTheActionCheckConstraint(AuditAction action) {
+    var logEntry =
+        new AuditLog(
+            ActorType.CUSTOMER,
+            UUID.randomUUID(),
+            action,
+            "subscription",
+            UUID.randomUUID(),
+            "192.168.0.1");
+
+    AuditLog saved = entityManager.persistAndFlush(logEntry); // INSERT runs now; id assigned
+    entityManager.clear(); // forget the cached object
+
+    AuditLog fetched = repository.findById(saved.getId()).orElseThrow(); // real SELECT
+
+    assertThat(fetched.getAction()).isEqualTo(action);
   }
 }

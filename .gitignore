@@ -71,3 +71,6 @@ flyway.local.conf
 compose.override.yaml
 # IntelliJ build output (when not delegating builds to Maven)
 out/
+
+# --- Claude ---
+.claude/

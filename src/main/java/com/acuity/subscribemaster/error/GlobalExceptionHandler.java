@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +28,11 @@ import org.springframework.web.servlet.NoHandlerFoundException;
  * and an {@link ApiError} body with a stable {@link ErrorCode}. Any exception without a specific
  * handler falls through to {@link #handleUnexpected}, which logs it with its stack trace and
  * returns a generic 500 message rather than the exception's own.
+ *
+ * <p>A denied {@code @PreAuthorize} check (FR-06) throws {@link AccessDeniedException} inside the
+ * controller call, so it reaches this class rather than Spring Security's filters. {@link
+ * #handleAccessDenied} turns it into a 403 {@code ACCESS_DENIED}; without it, the denial would fall
+ * through to the 500.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -238,6 +244,16 @@ public class GlobalExceptionHandler {
         HttpStatus.BAD_REQUEST,
         ErrorCode.MALFORMED_REQUEST,
         "No matching route for this request.",
+        request);
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ApiError> handleAccessDenied(HttpServletRequest request) {
+    logger.info("access denied on {} {}", request.getMethod(), request.getRequestURI());
+    return body(
+        HttpStatus.FORBIDDEN,
+        ErrorCode.ACCESS_DENIED,
+        "You do not have permission to perform this action.",
         request);
   }
 

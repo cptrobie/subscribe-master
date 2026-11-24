@@ -141,7 +141,7 @@ public class AuthService {
     }
 
     // 6. Issue a signed JWT -- self-verifying, nothing to persist
-    var issuedToken = jwtIssuer.issue(customerId);
+    var issuedToken = jwtIssuer.issueCustomer(customerId);
 
     // 7. Build and return the response with the token in the message body
     logger.info("customer {} login successful.", customerId);

@@ -104,7 +104,8 @@ New work: ~128h, in four slices:
 - **Actuator has its own security chain.** `SecurityConfig` defines its own
   `SecurityFilterChain`, so Spring Boot's default actuator security backs off and
   actuator would otherwise fall under `anyRequest().authenticated()` (health
-  returning 401). A second chain, scoped with `EndpointRequest`, owns actuator.
+  returning 401). A third chain, scoped with `EndpointRequest`, owns actuator,
+  alongside `FR-06`'s staff and customer chains.
   A customer or staff JWT grants no actuator access.
 - **Exposure is an allowlist.** `NFR-36` exposes exactly `health` and `info`;
   `NFR-39` adds `prometheus`. `loggers`, `env`, `configprops`, `beans`,
@@ -461,7 +462,7 @@ management port.
 
 **Acceptance**
 - A staff token with the permission gets the status; without it, 403; a customer
-  token, 403.
+  token, 401 (the staff chain rejects its audience).
 - The same staff token gets nothing from the management port's non-anonymous
   endpoints.
 
@@ -496,7 +497,7 @@ output just changed.
 - Each change writes one audit row: actor `staff` with the caller's
   `staff_users.id`, and `details` showing the old and new levels.
 - A `DELETE` returns the logger to its configured level and is audited.
-- Without the permission, 403; with a customer token, 403.
+- Without the permission, 403; with a customer token, 401.
 - Unknown level values are rejected with 400.
 
 ### `FR-43` — Staff application-log settings
@@ -535,7 +536,7 @@ fields are left out.
   table mode is saved and audited.
 - An invalid pattern (no `{date}`, a slash, `..`) or subfolder returns 400.
 - A stale version returns 409.
-- Permission checks as above; a customer token, 403.
+- Permission checks as above; a customer token, 401.
 
 ### `FR-44` — Staff audit-log archive settings
 
