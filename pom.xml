@@ -315,4 +315,59 @@
         </plugins>
     </build>
 
+    <profiles>
+        <!-- NFR-11: PIT mutation testing, on demand only, never part of 'verify'.
+             PIT re-runs the tests once per mutant, so it is far slower than a build.
+             It measures whether the UNIT tests' assertions would catch a broken line,
+             which line coverage cannot tell. Run it with:
+               ./mvnw -Ppitest test-compile org.pitest:pitest-maven:mutationCoverage
+             Report: target/pit-reports/index.html. No mutationThreshold yet: read the
+             surviving mutants first, then ratchet from the real baseline.
+             Excluded: *IT (Testcontainers per mutant would take hours); payment until
+             FR-12 (same as jacoco-check); the main class, Spring config and DTOs
+             (their mutants are mostly noise). -->
+        <profile>
+            <id>pitest</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.30.2</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>1.2.3</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.acuity.subscribemaster.*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.acuity.subscribemaster.*</param>
+                            </targetTests>
+                            <excludedClasses>
+                                <param>com.acuity.subscribemaster.payment.*</param>
+                                <param>com.acuity.subscribemaster.SubscribeMasterApplication</param>
+                                <param>com.acuity.subscribemaster.config.*</param>
+                                <param>com.acuity.subscribemaster.*.dto.*</param>
+                            </excludedClasses>
+                            <excludedTestClasses>
+                                <param>*IT</param>
+                            </excludedTestClasses>
+                            <threads>4</threads>
+                            <timestampedReports>false</timestampedReports>
+                            <outputFormats>
+                                <outputFormat>HTML</outputFormat>
+                                <outputFormat>XML</outputFormat>
+                            </outputFormats>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>
