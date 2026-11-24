@@ -47,3 +47,17 @@ jobs:
         # structurally impossible — SubscribeMasterApplicationIT is now
         # the sole context-boot verification.
         run: ./mvnw -B verify
+
+      - name: Upload merged coverage report
+        # NFR-11: attaches the merged (unit + IT) JaCoCo HTML report to every
+        # run, so coverage can be browsed without rebuilding locally.
+        # 'if: always()' is deliberate: when the coverage gate fails 'verify',
+        # the report is exactly what's needed to see why. If the build fails
+        # before the report exists, the step only warns.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-merged-report
+          path: target/site/jacoco-merged/
+          if-no-files-found: warn
+          retention-days: 14
