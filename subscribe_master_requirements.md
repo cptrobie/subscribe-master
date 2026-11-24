@@ -132,7 +132,7 @@ Each functional and non-functional requirement in this document has its own GitH
 | NFR-08 | Security / Configurability | Environment-based configuration | ➖ N/A | Deployment/config concern (`application-dev.yaml` vs `application-prod.yaml`), not a schema concern. |
 | NFR-09 | Usability | API documentation (Swagger) | ➖ N/A | Application-level. |
 | NFR-10 | Maintainability | Clean Code principles | ➖ N/A | Code quality concern, not schema. |
-| NFR-11 | Testability | Minimum test coverage (30%) | ➖ N/A | Testing concern, not schema. |
+| NFR-11 | Testability | Minimum test coverage (90% line / 80% branch, merged unit + IT; originally 30%) | ➖ N/A | Testing concern, not schema. Raised from 30% on 2026-11-24: JaCoCo's `check` now reads the merged unit + integration-test data, and `com/acuity/subscribemaster/payment/**` is excluded from the gate only (not from the reports) until `FR-12` builds and tests it. |
 | NFR-12 | Deployability | Single-command startup (Compose) | ➖ N/A | Deployment concern, not schema. |
 | NFR-13 | Maintainability | Managed database migrations (Liquibase) | ✅ Met (via Flyway) | The Tech Stack table (§3.1 of the source doc) lists Liquibase and Flyway as equally accepted tools, so this is a substitution, not a deviation. Flyway's own `flyway_schema_history` tracking table is intentionally excluded from the ERD as tool-internal infrastructure, not domain data — unlike `shedlock`, which *is* modeled in the ERD despite also being a pure coordination primitive, since it's part of this project's own schema (created by our migrations), not something Flyway manages internally the way `flyway_schema_history` is. |
 | NFR-14 | Maintainability / Testability | Constructor injection only | ➖ N/A | Application code concern. |
