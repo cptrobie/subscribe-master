@@ -102,7 +102,7 @@ This project started from a take-home assignment brief and has since grown into 
    ./mvnw verify
    SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
    ```
-   `./mvnw verify` is the same command CI runs: unit and integration tests (Testcontainers starts its own Postgres and Vault, so the compose stack isn't needed for this step), plus the JaCoCo 30% coverage gate. `spring-boot:run` needs the compose stack from step 2 and the Vault secrets from step 5. The profile has to be set explicitly; `application.yaml` deliberately doesn't set one. Once it's up, the API docs are at `http://localhost:8080/swagger-ui.html`, and verification emails land in Mailpit at `http://localhost:8025`.
+   `./mvnw verify` is the same command CI runs: unit and integration tests (Testcontainers starts its own Postgres and Vault, so the compose stack isn't needed for this step), plus the JaCoCo coverage gate (90% line / 80% branch on merged unit + integration-test coverage; reports land in `target/site/jacoco`, `jacoco-it` and `jacoco-merged`). Use `./mvnw clean verify` when you want accurate coverage numbers: without `clean`, data from earlier runs is appended. `spring-boot:run` needs the compose stack from step 2 and the Vault secrets from step 5. The profile has to be set explicitly; `application.yaml` deliberately doesn't set one. Once it's up, the API docs are at `http://localhost:8080/swagger-ui.html`, and verification emails land in Mailpit at `http://localhost:8025`.
 
 ## API surface
 
