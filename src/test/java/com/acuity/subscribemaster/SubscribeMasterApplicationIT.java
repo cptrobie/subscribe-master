@@ -148,8 +148,9 @@ class SubscribeMasterApplicationIT {
   }
 
   @Test
-  void openApiSpecIsServed() {
-    ResponseEntity<String> response = restTemplate.getForEntity("/v3/api-docs", String.class);
+  void customerOpenApiSpecIsServed() {
+    ResponseEntity<String> response =
+        restTemplate.getForEntity("/v3/api-docs/customer", String.class);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
   }
 }
