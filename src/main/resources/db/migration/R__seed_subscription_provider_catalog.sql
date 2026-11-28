@@ -12,6 +12,12 @@
 -- make re-runs safe — which is the signal this belongs here rather
 -- than in a versioned migration.
 --
+-- The conflict target is ON CONFLICT (name) WHERE deleted_at IS NULL,
+-- not plain ON CONFLICT (name). Since V14 (FR-35), name is unique only
+-- among active providers, through a partial unique index, and Postgres
+-- matches a partial index only when the clause repeats its WHERE
+-- predicate. Without it, this seed fails on every fresh database.
+--
 -- Populates subscription_providers with common third-party services.
 -- =====================================================================
 
@@ -76,4 +82,4 @@ INSERT INTO subscription_providers (name, category, website_url) VALUES
     ('MasterClass',         'education', 'https://www.masterclass.com'),
     ('Duolingo Plus',       'education', 'https://www.duolingo.com')
 
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (name) WHERE deleted_at IS NULL DO NOTHING;
