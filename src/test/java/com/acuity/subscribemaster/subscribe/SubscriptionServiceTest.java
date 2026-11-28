@@ -67,9 +67,7 @@ class SubscriptionServiceTest {
             billFreq,
             null,
             nextPayBillDate);
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, "Netflix", "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider("Netflix", "streaming service", null, null);
 
     when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -174,7 +172,6 @@ class SubscriptionServiceTest {
   void successfulPauseFromActiveSubscription_setsPausedStatusAndRecordsAuditEvent() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var providerName = "AppleTv";
     var accountIdentifier = "accountIdentifier";
     var paymentMethodId = UUID.randomUUID();
@@ -186,13 +183,13 @@ class SubscriptionServiceTest {
     var startedAt = Instant.parse("2026-06-01T00:00:00Z");
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, providerName, "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider(providerName, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -206,7 +203,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     // Act
@@ -229,7 +226,7 @@ class SubscriptionServiceTest {
 
     // then, that several service calls occurred
     verify(subscriptionRepo, times(1)).findByIdAndCustomerId(subscriptionId, customerId);
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verify(auditLogSvc, times(1))
         .recordEvent(
             ActorType.CUSTOMER,
@@ -244,7 +241,6 @@ class SubscriptionServiceTest {
   void successfulCancelFromPauseSubscription_setsCancelledStatusAndRecordsAuditEvent() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var providerName = "AppleTv";
     var accountIdentifier = "accountIdentifier";
     var paymentMethodId = UUID.randomUUID();
@@ -256,13 +252,13 @@ class SubscriptionServiceTest {
     var startedAt = Instant.parse("2026-06-01T00:00:00Z");
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, providerName, "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider(providerName, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -276,7 +272,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     // Act
@@ -297,7 +293,7 @@ class SubscriptionServiceTest {
 
     // then, that several service calls occurred
     verify(subscriptionRepo, times(1)).findByIdAndCustomerId(subscriptionId, customerId);
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verify(auditLogSvc, times(1))
         .recordEvent(
             ActorType.CUSTOMER,
@@ -312,7 +308,6 @@ class SubscriptionServiceTest {
   void successfulResumeFromPauseSubscription_setsActiveStatusAndRecordsAuditEvent() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var providerName = "AppleTv";
     var accountIdentifier = "accountIdentifier";
     var paymentMethodId = UUID.randomUUID();
@@ -324,13 +319,13 @@ class SubscriptionServiceTest {
     var startedAt = Instant.parse("2026-06-01T00:00:00Z");
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, providerName, "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider(providerName, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -344,7 +339,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     // Act
@@ -365,7 +360,7 @@ class SubscriptionServiceTest {
 
     // then, that several service calls occurred
     verify(subscriptionRepo, times(1)).findByIdAndCustomerId(subscriptionId, customerId);
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verify(auditLogSvc, times(1))
         .recordEvent(
             ActorType.CUSTOMER,
@@ -380,7 +375,6 @@ class SubscriptionServiceTest {
   void successfulResumeFromPauseSubscription_withMissedCycle_advancesNextPaymentDate() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var providerName = "AppleTv";
     var accountIdentifier = "accountIdentifier";
     var paymentMethodId = UUID.randomUUID();
@@ -392,13 +386,13 @@ class SubscriptionServiceTest {
     var startedAt = Instant.parse("2026-06-01T00:00:00Z");
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, providerName, "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider(providerName, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -412,7 +406,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     // Act
@@ -433,7 +427,7 @@ class SubscriptionServiceTest {
 
     // then, that several service calls occurred
     verify(subscriptionRepo, times(1)).findByIdAndCustomerId(subscriptionId, customerId);
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verify(auditLogSvc, times(1))
         .recordEvent(
             ActorType.CUSTOMER,
@@ -448,7 +442,6 @@ class SubscriptionServiceTest {
   void successfulGetOneUsingProvider_resolvesProviderName() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var providerName = "AmazonPrime";
     var accountIdentifier = "some random acct Id";
     var paymentMethodId = UUID.randomUUID();
@@ -458,13 +451,14 @@ class SubscriptionServiceTest {
     var nextPayBillDate = LocalDate.now();
     var status = SubscriptionStatus.ACTIVE;
     var startedAt = Instant.parse("2026-06-01T00:00:00Z");
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, providerName, "streaming service", null, null, Instant.now());
+
+    var validProvider = new SubscriptionProvider(providerName, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -478,7 +472,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
 
     // Act
     var response = subscriptionSvc.getOne(customerId, subscriptionId);
@@ -491,7 +485,7 @@ class SubscriptionServiceTest {
 
     // then, that several service calls occurred
     verify(subscriptionRepo, times(1)).findByIdAndCustomerId(subscriptionId, customerId);
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verifyNoInteractions(auditLogSvc);
   }
 
@@ -561,7 +555,6 @@ class SubscriptionServiceTest {
   @Test
   void successfulGetAll_returnsProviderAndCustomNameSubscriptions() {
     var customerId = UUID.randomUUID();
-    var providerId1 = UUID.randomUUID();
     var providerName1 = "hulu";
     var customName2 = "Other Test Name";
     var accountIdentifier = "some random acct Id";
@@ -575,14 +568,13 @@ class SubscriptionServiceTest {
     var status1 = SubscriptionStatus.ACTIVE;
     var status2 = SubscriptionStatus.PAUSED;
 
-    var validProvider =
-        new SubscriptionProvider(
-            providerId1, providerName1, "streaming service", null, null, Instant.now());
+    var validProvider = new SubscriptionProvider(providerName1, "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
 
     var subscription1 =
         new CustomerSubscription(
             customerId,
-            providerId1,
+            validProvider.getId(),
             null,
             accountIdentifier,
             paymentMethodId,
@@ -610,7 +602,7 @@ class SubscriptionServiceTest {
 
     when(subscriptionRepo.findByCustomerId(customerId))
         .thenReturn(List.of(subscription1, subscription2));
-    when(providerRepo.findById(providerId1)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
 
     // Act
     var responses = subscriptionSvc.getAll(customerId);
@@ -628,7 +620,7 @@ class SubscriptionServiceTest {
     assertThat(responses.get(1).amount()).isEqualTo(amount2);
     assertThat(responses.get(1).status()).isEqualTo(SubscriptionStatus.PAUSED);
 
-    verify(providerRepo, times(1)).findById(providerId1);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verifyNoInteractions(auditLogSvc);
   }
 
@@ -636,7 +628,6 @@ class SubscriptionServiceTest {
   void successfulUpdate_appliesFieldsAndRecordsAuditEvent() {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID();
-    var providerId = UUID.randomUUID();
     var customName = "a new custom subscription name";
     var updateCustomName = "The updated custom subscription name";
     var accountIdentifier = "accountIdentifier";
@@ -649,10 +640,13 @@ class SubscriptionServiceTest {
     var updatedBillFreq = BillingFrequency.WEEKLY;
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
+    var validProvider = new SubscriptionProvider("Hulu", "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", UUID.randomUUID());
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             customName,
             accountIdentifier,
             UUID.randomUUID(),
@@ -663,9 +657,6 @@ class SubscriptionServiceTest {
             LocalDate.now().plusDays(7),
             SubscriptionStatus.PAUSED,
             Instant.parse("2026-01-01T00:00:00Z"));
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, "Hulu", "streaming service", null, null, Instant.now());
     var subscriptionUpdateRequest =
         new SubscriptionUpdateRequest(
             updateCustomName,
@@ -678,7 +669,7 @@ class SubscriptionServiceTest {
     ReflectionTestUtils.setField(validSubscription, "id", subscriptionId);
     when(subscriptionRepo.findByIdAndCustomerId(subscriptionId, customerId))
         .thenReturn(Optional.of(validSubscription));
-    when(providerRepo.findById(providerId)).thenReturn(Optional.of(validProvider));
+    when(providerRepo.findById(validProvider.getId())).thenReturn(Optional.of(validProvider));
     when(subscriptionRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
     var response =
@@ -700,7 +691,7 @@ class SubscriptionServiceTest {
     assertThat(saved.getBillingFrequency()).isEqualTo(updatedBillFreq);
 
     // then, that several service calls occurred
-    verify(providerRepo, times(1)).findById(providerId);
+    verify(providerRepo, times(1)).findById(validProvider.getId());
     verify(auditLogSvc, times(1))
         .recordEvent(
             ActorType.CUSTOMER,
@@ -724,10 +715,13 @@ class SubscriptionServiceTest {
     var updatedBillIntervalDays = 14;
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
+    var validProvider = new SubscriptionProvider("Hulu", "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", providerId);
+
     var validSubscription =
         new CustomerSubscription(
             customerId,
-            providerId,
+            validProvider.getId(),
             null,
             accountIdentifier,
             UUID.randomUUID(),
@@ -738,9 +732,7 @@ class SubscriptionServiceTest {
             LocalDate.now().plusDays(7),
             SubscriptionStatus.ACTIVE,
             Instant.parse("2026-01-01T00:00:00Z"));
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, "Hulu", "streaming service", null, null, Instant.now());
+
     var subscriptionUpdateRequest =
         new SubscriptionUpdateRequest(
             null, accountIdentifier, currency, amount, billFreq, updatedBillIntervalDays);
@@ -789,6 +781,9 @@ class SubscriptionServiceTest {
     var billFreq = BillingFrequency.ANNUAL;
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
 
+    var validProvider = new SubscriptionProvider("Hulu", "streaming service", null, null);
+    ReflectionTestUtils.setField(validProvider, "id", providerId);
+
     // provider-based subscription with a custom label
     var validSubscription =
         new CustomerSubscription(
@@ -805,9 +800,7 @@ class SubscriptionServiceTest {
             SubscriptionStatus.ACTIVE,
             Instant.parse("2026-01-01T00:00:00Z"));
     ReflectionTestUtils.setField(validSubscription, "id", subscriptionId);
-    var validProvider =
-        new SubscriptionProvider(
-            providerId, "Hulu", "streaming service", null, null, Instant.now());
+
     var clearingRequest =
         new SubscriptionUpdateRequest(
             null, // This is the updated field
@@ -1169,6 +1162,7 @@ class SubscriptionServiceTest {
     var customerId = UUID.randomUUID();
     var subscriptionId = UUID.randomUUID(); // invalid for this test case
     var ipAddress = "127.0.0.1"; // this is MockHttpServletRequest's default value
+
     var updateRequest =
         new SubscriptionUpdateRequest(
             "a custom name",
